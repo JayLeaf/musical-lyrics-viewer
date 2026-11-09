@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.3.1';
+  var APP_VERSION = '1.3.2';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   var MODES = [['hand', '들고 보기'], ['table', '내려놓기'], ['book', '갤럭시북']];
 
@@ -864,10 +864,18 @@
     draw();
 
     async function save() {
+      // 줄 끝 시각(ends): 시작 시각을 바꾸지 않은 줄은 그대로 두고, 바꾼 줄은 비운다
+      var old = r.timing, ends = null;
+      if (old && Array.isArray(old.ends) && Array.isArray(old.times) && old.ends.length === L && old.times.length === L) {
+        ends = R.times.map(function (t, i) { return t !== null && t === old.times[i] ? old.ends[i] : null; });
+        if (!ends.some(function (e) { return e !== null; })) ends = null;
+      }
       r.timing = { lineCount: L, times: R.times.slice(), savedAt: Date.now() };
+      if (ends) r.timing.ends = ends;
       await saveSong(r);
-      var wrote = S.dir && r.src === 'folder' ? await writeFile(r.folder, r.file + '.timing.json',
-        JSON.stringify({ version: 1, lineCount: L, times: r.timing.times, offset: r.offset || 0 })) : false;
+      var tj = { version: 1, lineCount: L, times: r.timing.times, offset: r.offset || 0 };
+      if (ends) tj.ends = ends;
+      var wrote = S.dir && r.src === 'folder' ? await writeFile(r.folder, r.file + '.timing.json', JSON.stringify(tj)) : false;
       R.dirty = false; closeSheet(true);
       toast(wrote ? '타이밍을 저장했어요 (폴더에도 저장됨)' : '타이밍을 저장했어요');
     }
