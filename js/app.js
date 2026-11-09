@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.4.0';
+  var APP_VERSION = '1.4.1';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   var MODES = [['hand', '들고 보기'], ['table', '내려놓기'], ['book', '갤럭시북']];
 
@@ -54,12 +54,18 @@
   var BAD_NAME = /[\\/:*?"<>|]/;
 
   // ---------------------------------------------------------------- 상태
-  var DEF = { mode: null, showKo: true, scale: { hand: 1, table: 1, book: 1 }, lead: 0.5, group: 1.0, wake: true };
+  var DEF = { mode: null, showKo: true, scale: { hand: 1, table: 1, book: 1 }, lead: 0.1, group: 1.0, wake: true };
   var S = {
     songs: new Map(), overrides: {}, dir: null, curId: null, parsed: null, times: null, groups: [],
     set: Object.assign({}, DEF, lsGet('lv.settings', {}))
   };
   S.set.scale = Object.assign({}, DEF.scale, S.set.scale || {});
+  // 1.4.1: 미리 넘김 기본값 0.5 → 0.1. 예전 기본값(0.5) 그대로 쓰던 기기만 한 번 바꿔 줌
+  if (S.set.leadV !== 2) {
+    if (S.set.lead === 0.5) S.set.lead = 0.1;
+    S.set.leadV = 2;
+    try { localStorage.setItem('lv.settings', JSON.stringify(S.set)); } catch (e) { /* 무시 */ }
+  }
   if (!S.set.mode) {
     var wide = window.matchMedia('(pointer:fine)').matches && Math.max(innerWidth, innerHeight) >= 1000;
     S.set.mode = wide ? 'book' : 'hand';
