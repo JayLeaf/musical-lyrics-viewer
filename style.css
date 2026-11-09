@@ -263,3 +263,6 @@ body.sheet-open { overflow: hidden; }
 .chk { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--dim); }
 .chk input { width: 18px; height: 18px; }
 .ctrl .btn.abtn.on { border-color: var(--accent); color: var(--accent); }
+.rshift { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; }
+.rshift .shiftlbl { min-width: 9em; text-align: center; font-variant-numeric: tabular-nums; font-size: 14px; }
+.ctrl .shiftbox .shiftval { font-size: 12px; white-space: nowrap; }
