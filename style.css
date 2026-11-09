@@ -69,6 +69,10 @@ body[data-mode="table"], body[data-mode="book"] { height: 100vh; height: 100dvh;
 .rows { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: .25em; padding: 0 max(5vw, 16px); overflow: hidden; touch-action: none; cursor: pointer; }
 .slot { line-height: 1.22; transition: opacity .18s; }
 .slot:empty { display: none; }
+.slot.multi .gl { font-size: .86em; }
+.slot.multi .gl + .gl { margin-top: .18em; }
+.slot.multi .gl.gk { margin-top: .05em; }
+.slot.multi .gl:not(.gk) + .gl.gk { margin-top: .3em; }
 .slot .who { font-size: .42em; font-weight: 700; letter-spacing: .04em; opacity: .85; margin-bottom: .1em; }
 .slot .ko { font-size: .56em; color: var(--ko); font-weight: 400; margin-top: .12em; line-height: 1.3; }
 .slot .intro { color: var(--faint); }

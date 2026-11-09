@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.2.1';
+  var APP_VERSION = '1.3.1';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   var MODES = [['hand', '들고 보기'], ['table', '내려놓기'], ['book', '갤럭시북']];
 
@@ -54,9 +54,9 @@
   var BAD_NAME = /[\\/:*?"<>|]/;
 
   // ---------------------------------------------------------------- 상태
-  var DEF = { mode: null, showKo: true, scale: { hand: 1, table: 1, book: 1 }, lead: 0.5, wake: true };
+  var DEF = { mode: null, showKo: true, scale: { hand: 1, table: 1, book: 1 }, lead: 0.5, group: 1.0, wake: true };
   var S = {
-    songs: new Map(), overrides: {}, dir: null, curId: null, parsed: null, times: null,
+    songs: new Map(), overrides: {}, dir: null, curId: null, parsed: null, times: null, groups: [],
     set: Object.assign({}, DEF, lsGet('lv.settings', {}))
   };
   S.set.scale = Object.assign({}, DEF.scale, S.set.scale || {});
@@ -73,9 +73,27 @@
 
   function reparse() {
     var r = cur();
-    if (!r) { S.parsed = null; S.times = null; return; }
+    if (!r) { S.parsed = null; S.times = null; S.groups = []; return; }
     S.parsed = LP.parseSong(r.raw, { counts: r.counts, overrides: S.overrides });
     S.times = LP.effectiveTimes(r.timing, S.parsed.lines.length);
+    S.groups = makeGroups();
+  }
+  // 화면에 한 번에 보여줄 줄 묶음: 다음 줄이 S.set.group초 안에 시작하면(짧은 줄),
+  // (괄호) 줄이 그 2.5배 안에 시작하면(맞받는 줄), 앞 줄이 끝나기 전에 시작하면(겹침, timing.ends 있을 때)
+  // 앞 줄과 같이 보여준다. 최대 3줄.
+  function makeGroups() {
+    var n = S.parsed ? S.parsed.lines.length : 0, t = S.times, gap = S.set.group || 0, G = [];
+    var r = cur(), tm = r && r.timing, own = tm && tm.times, ends = tm && Array.isArray(tm.ends) && tm.ends.length === n ? tm.ends : null;
+    for (var i = 0; i < n; i++) {
+      var g = G[G.length - 1], join = false;
+      if (t && g && gap > 0 && g.length < 3) {
+        var d = t[i] - t[i - 1];
+        join = d < gap || (/^[\s(（]*[(（]/.test(S.parsed.lines[i].text) && d < gap * 2.5) ||
+          !!(ends && own && typeof own[i] === 'number' && typeof ends[i - 1] === 'number' && own[i] < ends[i - 1] - 0.3);
+      }
+      if (join) g.push(i); else G.push([i]);
+    }
+    return G;
   }
   function selectSong(id) {
     S.curId = id; lsSet('lv.last', id);
@@ -201,9 +219,10 @@
 
   function songNow() { return PB.playing ? PB.aSong + (performance.now() - PB.aPerf) / 1000 : PB.aSong; }
   function effT(i) { var r = cur(); return S.times[i] + ((r && r.offset) || 0); }
+  function gT(g) { return effT(S.groups[g][0]); }
   function lineAt(s) {
     var lo = -1;
-    for (var i = 0; i < S.times.length; i++) { if (effT(i) - S.set.lead <= s) lo = i; else break; }
+    for (var g = 0; g < S.groups.length; g++) { if (gT(g) - S.set.lead <= s) lo = g; else break; }
     return lo;
   }
   function play() {
@@ -225,11 +244,11 @@
   }
   function step(d) {
     if (!S.parsed) return;
-    var n = S.parsed.lines.length;
+    var n = S.groups.length;
     var ni = Math.max(-1, Math.min(n - 1, PB.idx + d));
     if (ni === PB.idx) return;
     PB.idx = ni;
-    if (S.times) { PB.aSong = ni < 0 ? 0 : effT(ni) - S.set.lead + 0.01; PB.aPerf = performance.now(); }
+    if (S.times) { PB.aSong = ni < 0 ? 0 : gT(ni) - S.set.lead + 0.01; PB.aPerf = performance.now(); }
     updateStage();
   }
   function restart() { stopPlayback(); updateStage(); }
@@ -280,7 +299,7 @@
   }
 
   function fillSlot(el, i, off) {
-    var p = S.parsed, n = p.lines.length;
+    var p = S.parsed, n = S.groups.length;
     el.replaceChildren();
     el.className = 'slot';
     if (i < -1 || i >= n) {
@@ -291,11 +310,25 @@
       el.append(h('div', { class: 'txt intro' }, '♪'));
       return;
     }
-    var ln = p.lines[i];
-    el.classList.add(PCLS[ln.part]);
-    if (ln.singer && (ln.groupStart || off === 0)) el.append(h('div', { class: 'who' }, ln.singer));
-    el.append(txtEl(ln.text));
-    if (S.set.showKo && ln.ko) el.append(h('div', { class: 'ko' }, ln.ko));
+    var grp = S.groups[i];
+    el.classList.add(PCLS[p.lines[grp[0]].part]);
+    if (grp.length > 1) el.classList.add('multi');
+    // 묶음이면 원문 줄을 모두 먼저, 해석은 그 아래에 모아서 (영영 한한)
+    grp.forEach(function (li, k) {
+      var ln = p.lines[li], box = el;
+      if (grp.length > 1) { box = h('div', { class: 'gl ' + PCLS[ln.part] }); el.append(box); }
+      var prev = k > 0 ? p.lines[grp[k - 1]] : null;
+      if (ln.singer && (ln.groupStart || (off === 0 && k === 0) || (prev && prev.singer !== ln.singer)))
+        box.append(h('div', { class: 'who' }, ln.singer));
+      box.append(txtEl(ln.text));
+      if (grp.length === 1 && S.set.showKo && ln.ko) box.append(h('div', { class: 'ko' }, ln.ko));
+    });
+    if (grp.length > 1 && S.set.showKo) {
+      grp.forEach(function (li) {
+        var ln = p.lines[li];
+        if (ln.ko) el.append(h('div', { class: 'gl gk ' + PCLS[ln.part] }, h('div', { class: 'ko' }, ln.ko)));
+      });
+    }
   }
 
   function updateStage() {
@@ -312,14 +345,14 @@
   function updateHud() {
     if (!STAGE) return;
     PB.hudAt = performance.now();
-    var n = S.parsed.lines.length;
+    var n = S.groups.length;
     STAGE.prog.style.width = (n ? ((PB.idx + 1) / n) * 100 : 0) + '%';
     var msg = '';
     if (S.times) {
       if (!PB.playing && PB.idx < 0 && PB.aSong === 0) msg = 'MR 시작과 동시에 ▶';
       else if (!PB.playing) msg = '일시정지';
       else if (PB.idx < n - 1) {
-        var rem = effT(PB.idx + 1) - S.set.lead - songNow();
+        var rem = gT(PB.idx + 1) - S.set.lead - songNow();
         if (rem > 3) msg = '다음 줄 ' + Math.ceil(rem) + '초';
       }
     }
@@ -415,6 +448,13 @@
     return h('button', { class: 'row-toggle', type: 'button', 'aria-pressed': on ? 'true' : 'false', onclick: fn },
       h('span', null, label), h('span', { class: 'sw' }));
   }
+  function setGroup(v) {
+    S.set.group = Math.max(0, Math.min(3, round(v, 1))); saveSet();
+    var line = PB.idx >= 0 && S.groups[PB.idx] ? S.groups[PB.idx][0] : -1;
+    S.groups = makeGroups();
+    if (line >= 0) PB.idx = S.groups.findIndex(function (g) { return g.indexOf(line) >= 0; });
+    buildDrawer(); render();
+  }
   function stepper(label, val, minus, plus) {
     return h('div', { class: 'row-step' }, h('span', null, label),
       h('span', { class: 'stepper' }, btn('−', minus, 'small'), h('b', null, val), btn('+', plus, 'small')));
@@ -471,7 +511,10 @@
         function () { S.set.scale[S.set.mode] = Math.min(2.5, round(sc + 0.1, 1)); saveSet(); buildDrawer(); render(); }),
       stepper('미리 넘김', S.set.lead.toFixed(1) + '초',
         function () { S.set.lead = Math.max(0, round(S.set.lead - 0.1, 1)); saveSet(); buildDrawer(); },
-        function () { S.set.lead = Math.min(3, round(S.set.lead + 0.1, 1)); saveSet(); buildDrawer(); }));
+        function () { S.set.lead = Math.min(3, round(S.set.lead + 0.1, 1)); saveSet(); buildDrawer(); }),
+      stepper('짧은 줄 묶기', S.set.group > 0 ? S.set.group.toFixed(1) + '초 안' : '끔',
+        function () { setGroup(S.set.group - 0.1); },
+        function () { setGroup(S.set.group + 0.1); }));
 
     var listBox = h('div', { class: 'songlist' });
     var search = h('input', { class: 'inp search', type: 'search', placeholder: '🔍 곡 찾기', value: songQuery });
@@ -985,6 +1028,8 @@
     var times = t.times.map(function (x) { return typeof x === 'number' && isFinite(x) && x >= 0 && x < 36000 ? x : null; });
     var out = { lineCount: Number.isInteger(t.lineCount) ? t.lineCount : times.length, times: times };
     if (typeof t.offset === 'number' && isFinite(t.offset)) out.offset = Math.max(-120, Math.min(120, t.offset));
+    if (Array.isArray(t.ends) && t.ends.length === times.length)
+      out.ends = t.ends.map(function (x) { return typeof x === 'number' && isFinite(x) && x >= 0 && x < 36000 ? x : null; });
     return out;
   }
   function sanitizeSong(s) {
