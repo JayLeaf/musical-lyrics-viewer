@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.2.0';
+  var APP_VERSION = '1.2.1';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   var MODES = [['hand', '들고 보기'], ['table', '내려놓기'], ['book', '갤럭시북']];
 
@@ -258,6 +258,7 @@
     }
     var playBtn = btn('▶', function () { PB.playing ? pause() : play(); }, 'play', '시작/일시정지');
     var offVal = h('span', { class: 'offval' });
+    var fsBtn = btn('⛶', toggleFs, 'fsbtn', '전체 화면');
     var ctrl = h('div', { class: 'ctrl' },
       btn('⏮', restart, '', '처음으로'),
       btn('‹', function () { step(-1); }, '', '이전 줄'),
@@ -267,12 +268,13 @@
         btn('−0.5', function () { nudgeOffset(-0.5); }, 'small', '가사를 0.5초 빨리'),
         offVal,
         btn('+0.5', function () { nudgeOffset(0.5); }, 'small', '가사를 0.5초 늦게')) : null,
-      btn('⛶', toggleFs, '', '전체 화면')
+      fsBtn
     );
     var rotate = h('div', { class: 'rotate-hint' }, '가로로 돌리면 더 크게 보여요');
     st.append(prog, h('div', { class: 'hud' }, hudL, hudR), rotate, rows, ctrl);
     attachGestures(rows);
-    STAGE = { prog: prog.firstChild, hudR: hudR, slots: slots, playBtn: playBtn, offVal: offVal };
+    STAGE = { prog: prog.firstChild, hudR: hudR, slots: slots, playBtn: playBtn, offVal: offVal, fsBtn: fsBtn };
+    updateFsBtn();
     updateStage();
     return st;
   }
@@ -348,6 +350,21 @@
       }
     } catch (e) { toast('이 브라우저에선 전체 화면을 쓸 수 없어요'); }
   }
+  function updateFsBtn() {
+    var on = !!document.fullscreenElement;
+    document.body.classList.toggle('is-fs', on);
+    if (!STAGE || !STAGE.fsBtn) return;
+    STAGE.fsBtn.textContent = on ? '✕ 전체 화면 끝' : '⛶';
+    STAGE.fsBtn.title = on ? '전체 화면 해제' : '전체 화면';
+    STAGE.fsBtn.setAttribute('aria-label', STAGE.fsBtn.title);
+    STAGE.fsBtn.classList.toggle('on', on);
+  }
+  document.addEventListener('fullscreenchange', function () {
+    if (!document.fullscreenElement && screen.orientation && screen.orientation.unlock) {
+      try { screen.orientation.unlock(); } catch (e) {}
+    }
+    updateFsBtn();
+  });
 
   document.addEventListener('keydown', function (e) {
     if (SHEET) { if (SHEET.onKey) SHEET.onKey(e); return; }

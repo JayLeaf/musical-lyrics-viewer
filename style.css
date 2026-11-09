@@ -123,6 +123,7 @@ body[data-mode="book"] .slot[data-off="5"], body[data-mode="book"] .slot[data-of
 .ctrl .btn { min-width: 44px; min-height: 42px; font-size: 18px; }
 .ctrl .btn.play { min-width: 64px; background: var(--accent); border-color: var(--accent); color: #1b1606; font-weight: 700; }
 .ctrl .btn.small { font-size: 13px; min-height: 36px; }
+.ctrl .btn.fsbtn.on { font-size: 14px; font-weight: 700; border-color: var(--accent); color: var(--accent); }
 .offset { display: inline-flex; align-items: center; gap: 4px; }
 .offval { font-size: 13px; color: var(--dim); min-width: 52px; text-align: center; }
 .notime { padding: 0 6px; }
