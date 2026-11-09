@@ -229,15 +229,22 @@ body.sheet-open { overflow: hidden; }
 .rbtns { display: flex; flex-wrap: wrap; gap: 8px; }
 .rbtns .btn.big { flex: 1; min-width: 200px; }
 .rlist { display: flex; flex-direction: column; gap: 2px; }
-.rrow { display: grid; grid-template-columns: 82px 1fr 96px auto; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 8px; }
+.rrow { display: grid; grid-template-columns: 82px 1fr 140px auto; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 8px; }
 .rrow.cur { background: rgba(255, 209, 102, .12); }
 .rrow .rt { border: 1px solid var(--line); background: var(--bg2); border-radius: 6px; padding: 5px 4px; font-variant-numeric: tabular-nums; font-size: 13px; cursor: pointer; }
 .rrow.none .rt { color: var(--faint); }
 .rrow .rx { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rrow .rb { display: flex; gap: 4px; }
 .rrow .rt.re.none { color: var(--faint); border-style: dashed; }
+.rrow .re-box { display: flex; align-items: stretch; gap: 2px; }
+.rrow .re-box .rt { flex: 1; min-width: 0; }
+.rrow .re-box .en { width: 22px; border: 1px solid var(--line); background: var(--bg2); color: inherit; border-radius: 6px; cursor: pointer; padding: 0; }
+.rrow .re-box .en:disabled { opacity: .3; cursor: default; }
 @media (max-width: 560px) {
-  .rrow { grid-template-columns: 82px 96px 1fr; row-gap: 4px; }
+  .rrow { grid-template-columns: 62px 116px 1fr; column-gap: 6px; row-gap: 4px; padding: 5px 2px; }
+  .rrow .rt { font-size: 12px; padding: 5px 2px; }
+  .rrow .re-box .en { width: 18px; }
+  .rrow .rb .btn.small { padding-left: 6px; padding-right: 6px; }
   .rrow .rx { grid-column: 1 / -1; order: -1; }
   .rrow .rb { justify-content: flex-end; }
 }
@@ -255,3 +262,4 @@ body.sheet-open { overflow: hidden; }
 .pwbox { max-width: 420px; margin: 20px auto; display: flex; flex-direction: column; gap: 12px; }
 .chk { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--dim); }
 .chk input { width: 18px; height: 18px; }
+.ctrl .btn.abtn.on { border-color: var(--accent); color: var(--accent); }

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.3.3';
+  var APP_VERSION = '1.3.4';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   var MODES = [['hand', '들고 보기'], ['table', '내려놓기'], ['book', '갤럭시북']];
 
@@ -97,7 +97,7 @@
   }
   function selectSong(id) {
     S.curId = id; lsSet('lv.last', id);
-    stopPlayback(); reparse(); closeDrawer(); render();
+    stopPlayback(); closeStageAudio(); reparse(); closeDrawer(); render();
     window.scrollTo(0, 0);
   }
   function pickDefault() {
@@ -214,10 +214,41 @@
   }
 
   // ---------------------------------------------------------------- 자동 넘김 (모드 2·3)
-  var PB = { playing: false, aSong: 0, aPerf: 0, idx: -1, raf: 0, hudAt: 0 };
+  var PB = { playing: false, aSong: 0, aPerf: 0, idx: -1, raf: 0, hudAt: 0, audio: null, url: null, aname: '' };
   var STAGE = null;
 
-  function songNow() { return PB.playing ? PB.aSong + (performance.now() - PB.aPerf) / 1000 : PB.aSong; }
+  // 음원을 열었으면 음원의 재생 위치가 곧 곡 시각 (일시정지·되감기해도 가사가 따라감)
+  function songNow() {
+    if (PB.audio) return PB.audio.currentTime || 0;
+    return PB.playing ? PB.aSong + (performance.now() - PB.aPerf) / 1000 : PB.aSong;
+  }
+  function seekSong(t) {
+    t = Math.max(0, t);
+    if (PB.audio) { try { PB.audio.currentTime = t; } catch (e) { /* 무시 */ } }
+    PB.aSong = t; PB.aPerf = performance.now();
+  }
+  function openStageAudio(f) {
+    closeStageAudio();
+    var a = new Audio();
+    PB.url = URL.createObjectURL(f); a.src = PB.url; a.preload = 'auto';
+    a.addEventListener('ended', function () { PB.playing = false; cancelAnimationFrame(PB.raf); updateStage(); });
+    a.addEventListener('pause', function () { if (PB.playing) { PB.playing = false; cancelAnimationFrame(PB.raf); updateStage(); } });
+    // 화면 갱신이 느려지거나 멈춰도(백그라운드 등) 음원 위치로 줄을 맞춘다
+    a.addEventListener('timeupdate', function () {
+      if (!PB.playing || !S.times) return;
+      var i = lineAt(songNow());
+      if (i !== PB.idx) { PB.idx = i; updateStage(); }
+    });
+    PB.audio = a; PB.aname = f.name;
+    seekSong(PB.idx < 0 ? 0 : gT(PB.idx) - S.set.lead + 0.01);
+    toast('음원을 열었어요: ' + f.name + ' (▶로 같이 재생)');
+    updateStage();
+  }
+  function closeStageAudio() {
+    if (PB.audio) { PB.audio.pause(); PB.audio.removeAttribute('src'); }
+    if (PB.url) URL.revokeObjectURL(PB.url);
+    PB.audio = null; PB.url = null; PB.aname = '';
+  }
   function effT(i) { var r = cur(); return S.times[i] + ((r && r.offset) || 0); }
   function gT(g) { return effT(S.groups[g][0]); }
   function lineAt(s) {
@@ -228,13 +259,22 @@
   function play() {
     if (!S.times || PB.playing) return;
     PB.aPerf = performance.now(); PB.playing = true; wakeOn();
+    if (PB.audio) {
+      var pr = PB.audio.play();
+      if (pr && pr.catch) pr.catch(function (e) { PB.playing = false; toast('음원을 재생하지 못했어요: ' + e.message); updateStage(); });
+    }
     tick(); updateStage();
   }
   function pause() {
     if (!PB.playing) return;
-    PB.aSong = songNow(); PB.playing = false; cancelAnimationFrame(PB.raf); updateStage();
+    PB.aSong = songNow(); PB.playing = false; cancelAnimationFrame(PB.raf);
+    if (PB.audio) PB.audio.pause();
+    updateStage();
   }
-  function stopPlayback() { PB.playing = false; cancelAnimationFrame(PB.raf); PB.aSong = 0; PB.idx = -1; }
+  function stopPlayback() {
+    PB.playing = false; cancelAnimationFrame(PB.raf); PB.aSong = 0; PB.idx = -1;
+    if (PB.audio) { PB.audio.pause(); seekSong(0); }
+  }
   function tick() {
     if (!PB.playing) return;
     var i = lineAt(songNow());
@@ -248,7 +288,7 @@
     var ni = Math.max(-1, Math.min(n - 1, PB.idx + d));
     if (ni === PB.idx) return;
     PB.idx = ni;
-    if (S.times) { PB.aSong = ni < 0 ? 0 : gT(ni) - S.set.lead + 0.01; PB.aPerf = performance.now(); }
+    if (S.times) seekSong(ni < 0 ? 0 : gT(ni) - S.set.lead + 0.01);
     updateStage();
   }
   function restart() { stopPlayback(); updateStage(); }
@@ -278,6 +318,9 @@
     var playBtn = btn('▶', function () { PB.playing ? pause() : play(); }, 'play', '시작/일시정지');
     var offVal = h('span', { class: 'offval' });
     var fsBtn = btn('⛶', toggleFs, 'fsbtn', '전체 화면');
+    var aIn = h('input', { type: 'file', accept: 'audio/*', hidden: true });
+    aIn.addEventListener('change', function () { var f = aIn.files[0]; aIn.value = ''; if (f) openStageAudio(f); });
+    var aBtn = btn('🎵', function () { aIn.click(); }, 'abtn' + (PB.audio ? ' on' : ''), PB.audio ? '음원: ' + PB.aname + ' (눌러서 다른 파일)' : '음원 파일 열기 (MR) — 가사와 같이 재생');
     var ctrl = h('div', { class: 'ctrl' },
       btn('⏮', restart, '', '처음으로'),
       btn('‹', function () { step(-1); }, '', '이전 줄'),
@@ -287,12 +330,13 @@
         btn('−0.5', function () { nudgeOffset(-0.5); }, 'small', '가사를 0.5초 빨리'),
         offVal,
         btn('+0.5', function () { nudgeOffset(0.5); }, 'small', '가사를 0.5초 늦게')) : null,
+      S.times ? aBtn : null, aIn,
       fsBtn
     );
     var rotate = h('div', { class: 'rotate-hint' }, '가로로 돌리면 더 크게 보여요');
     st.append(prog, h('div', { class: 'hud' }, hudL, hudR), rotate, rows, ctrl);
     attachGestures(rows);
-    STAGE = { prog: prog.firstChild, hudR: hudR, slots: slots, playBtn: playBtn, offVal: offVal, fsBtn: fsBtn };
+    STAGE = { prog: prog.firstChild, hudR: hudR, slots: slots, playBtn: playBtn, offVal: offVal, fsBtn: fsBtn, aBtn: aBtn };
     updateFsBtn();
     updateStage();
     return st;
@@ -338,6 +382,10 @@
       fillSlot(el, PB.idx + off, off);
     });
     STAGE.playBtn.textContent = PB.playing ? '⏸' : '▶';
+    if (STAGE.aBtn) {
+      STAGE.aBtn.classList.toggle('on', !!PB.audio);
+      STAGE.aBtn.title = PB.audio ? '음원: ' + PB.aname + ' (눌러서 다른 파일)' : '음원 파일 열기 (MR) — 가사와 같이 재생';
+    }
     var r = cur();
     STAGE.offVal.textContent = signed((r && r.offset) || 0) + '초';
     updateHud();
@@ -349,7 +397,7 @@
     STAGE.prog.style.width = (n ? ((PB.idx + 1) / n) * 100 : 0) + '%';
     var msg = '';
     if (S.times) {
-      if (!PB.playing && PB.idx < 0 && PB.aSong === 0) msg = 'MR 시작과 동시에 ▶';
+      if (!PB.playing && PB.idx < 0 && songNow() === 0) msg = PB.audio ? '🎵 ' + PB.aname + ' · ▶로 같이 재생' : 'MR 시작과 동시에 ▶';
       else if (!PB.playing) msg = '일시정지';
       else if (PB.idx < n - 1) {
         var rem = gT(PB.idx + 1) - S.set.lead - songNow();
@@ -827,6 +875,12 @@
       if (R.times[i] === null) return;
       R.times[i] = Math.max(0, round(R.times[i] + d, 2)); R.dirty = true; draw();
     }
+    function nudgeEnd(i, d) {
+      if (R.ends[i] === null) return;
+      var t = round(R.ends[i] + d, 2);
+      if (R.times[i] !== null && t <= R.times[i]) { toast('끝은 시작보다 뒤여야 해요'); return; }
+      R.ends[i] = t; R.dirty = true; draw();
+    }
     // i번 줄의 끝을 지금 시각으로 (i 없으면 방금 시작을 찍은 줄)
     function markEnd(i) {
       if (i === undefined) i = R.next - 1;
@@ -863,9 +917,12 @@
         return h('div', { class: 'rrow' + (i === R.next ? ' cur' : '') + (R.times[i] === null ? ' none' : '') },
           h('button', { class: 'rt', type: 'button', title: '여기서부터 다시 찍기', onclick: function () { setNext(i); } }, fmtT(R.times[i])),
           h('div', { class: 'rx ' + PCLS[ln.part] }, ln.text),
-          h('button', { class: 'rt re' + (R.ends[i] === null ? ' none' : ''), type: 'button',
-            title: '지금 재생 위치를 이 줄의 끝으로', onclick: function () { markEnd(i); } },
-            R.ends[i] === null ? '끝 —' : '끝 ' + fmtT(R.ends[i])),
+          h('div', { class: 're-box' },
+            h('button', { class: 'en', type: 'button', title: '끝 0.1초 앞으로', disabled: R.ends[i] === null, onclick: function () { nudgeEnd(i, -0.1); } }, '‹'),
+            h('button', { class: 'rt re' + (R.ends[i] === null ? ' none' : ''), type: 'button',
+              title: '지금 재생 위치를 이 줄의 끝으로', onclick: function () { markEnd(i); } },
+              R.ends[i] === null ? '끝 —' : '끝 ' + fmtT(R.ends[i])),
+            h('button', { class: 'en', type: 'button', title: '끝 0.1초 뒤로', disabled: R.ends[i] === null, onclick: function () { nudgeEnd(i, 0.1); } }, '›')),
           h('div', { class: 'rb' },
             btn('−0.1', function () { nudge(i, -0.1); }, 'small'),
             btn('+0.1', function () { nudge(i, 0.1); }, 'small'),
