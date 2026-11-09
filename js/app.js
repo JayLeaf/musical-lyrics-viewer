@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.3.2';
+  var APP_VERSION = '1.3.3';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   var MODES = [['hand', '들고 보기'], ['table', '내려놓기'], ['book', '갤럭시북']];
 
@@ -755,6 +755,9 @@
       next: 0, audio: null, url: null, swAcc: 0, swStart: 0, running: false, dirty: false, timer: 0
     };
     while (R.times.length < L) R.times.push(null);
+    // 줄 끝 시각: 겹치는 줄 묶기에 쓰임. 없는 줄은 null
+    R.ends = (r.timing && Array.isArray(r.timing.ends) && r.timing.ends.length === R.times.length ? r.timing.ends.slice(0, L) : []);
+    while (R.ends.length < L) R.ends.push(null);
     R.next = R.times.indexOf(null); if (R.next < 0) R.next = L;
     var mismatch = r.timing && r.timing.lineCount !== L;
 
@@ -792,20 +795,21 @@
     function mark() {
       if (R.next >= L) return;
       if (!isRunning()) { toggle(); }
-      R.times[R.next] = round(clock(), 2);
+      R.times[R.next] = round(clock(), 2); R.ends[R.next] = null;
       R.next++; R.dirty = true; draw(true);
     }
     function undo() {
       if (R.next <= 0) return;
       R.next--;
       var t = R.times[R.next];
-      R.times[R.next] = null; R.dirty = true;
+      R.times[R.next] = null; R.ends[R.next] = null; R.dirty = true;
       if (R.audio && t !== null) R.audio.currentTime = Math.max(0, t - 3);
       draw(true);
     }
     function resetAll() {
       if (!confirm('찍은 타이밍을 모두 지우고 처음부터 할까요?')) return;
       R.times = R.times.map(function () { return null; });
+      R.ends = R.ends.map(function () { return null; });
       R.next = 0; R.swAcc = 0; R.running = false; R.dirty = true;
       if (R.audio) { R.audio.pause(); R.audio.currentTime = 0; }
       draw(true);
@@ -823,6 +827,15 @@
       if (R.times[i] === null) return;
       R.times[i] = Math.max(0, round(R.times[i] + d, 2)); R.dirty = true; draw();
     }
+    // i번 줄의 끝을 지금 시각으로 (i 없으면 방금 시작을 찍은 줄)
+    function markEnd(i) {
+      if (i === undefined) i = R.next - 1;
+      if (i < 0 || i >= L) return;
+      if (R.times[i] === null) { toast('먼저 이 줄의 시작을 찍어 주세요'); return; }
+      var t = round(clock(), 2);
+      if (t <= R.times[i]) { toast('끝은 시작보다 뒤여야 해요 (재생 위치를 확인하세요)'); return; }
+      R.ends[i] = t; R.dirty = true; draw();
+    }
     function preview(i) {
       if (!R.audio || R.times[i] === null) { toast('미리 듣기는 MR/원곡 파일을 열었을 때만 돼요'); return; }
       R.audio.currentTime = Math.max(0, R.times[i] - 1.5); R.audio.play();
@@ -832,6 +845,7 @@
     var target = h('div', { class: 'rtarget' });
     var runBtn = btn('▶ 시작', toggle, '');
     var markBtn = btn('● 줄 시작 표시 (Space)', mark, 'primary big');
+    var endBtn = btn('■ 방금 줄 끝 (E)', function () { markEnd(); }, '');
     var list = h('div', { class: 'rlist' });
 
     function draw(scroll) {
@@ -849,6 +863,9 @@
         return h('div', { class: 'rrow' + (i === R.next ? ' cur' : '') + (R.times[i] === null ? ' none' : '') },
           h('button', { class: 'rt', type: 'button', title: '여기서부터 다시 찍기', onclick: function () { setNext(i); } }, fmtT(R.times[i])),
           h('div', { class: 'rx ' + PCLS[ln.part] }, ln.text),
+          h('button', { class: 'rt re' + (R.ends[i] === null ? ' none' : ''), type: 'button',
+            title: '지금 재생 위치를 이 줄의 끝으로', onclick: function () { markEnd(i); } },
+            R.ends[i] === null ? '끝 —' : '끝 ' + fmtT(R.ends[i])),
           h('div', { class: 'rb' },
             btn('−0.1', function () { nudge(i, -0.1); }, 'small'),
             btn('+0.1', function () { nudge(i, 0.1); }, 'small'),
@@ -864,12 +881,9 @@
     draw();
 
     async function save() {
-      // 줄 끝 시각(ends): 시작 시각을 바꾸지 않은 줄은 그대로 두고, 바꾼 줄은 비운다
-      var old = r.timing, ends = null;
-      if (old && Array.isArray(old.ends) && Array.isArray(old.times) && old.ends.length === L && old.times.length === L) {
-        ends = R.times.map(function (t, i) { return t !== null && t === old.times[i] ? old.ends[i] : null; });
-        if (!ends.some(function (e) { return e !== null; })) ends = null;
-      }
+      // 줄 끝 시각(ends): 시작이 있고 끝이 시작보다 뒤인 줄만. 하나도 없으면 저장하지 않음
+      var ends = R.ends.map(function (e, i) { return R.times[i] !== null && e !== null && e > R.times[i] ? e : null; });
+      if (!ends.some(function (e) { return e !== null; })) ends = null;
       r.timing = { lineCount: L, times: R.times.slice(), savedAt: Date.now() };
       if (ends) r.timing.ends = ends;
       await saveSong(r);
@@ -886,8 +900,9 @@
         btn('🎵 MR/원곡 파일 열기', function () { fileIn.click(); }), fileIn, rateSel, srcLbl),
       audioEl,
       h('p', { class: 'muted small' }, '유튜브로 들을 때: 유튜브에서 곡을 재생하는 순간 ▶ 시작을 누르고, 줄이 바뀔 때마다 Space(또는 ● 버튼). 틀리면 Backspace(↶)로 한 줄 되돌리기.'),
+      h('p', { class: 'muted small' }, '줄 끝: 방금 찍은 줄이 끝날 때 E(또는 ■ 버튼). 목록의 "끝" 칸을 누르면 지금 재생 위치가 그 줄의 끝이 돼요. 끝이 있으면 다음 줄이 끝나기 전에 나올 때 두 줄을 같이 보여줘요.'),
       h('div', { class: 'rpanel' }, clockEl, target,
-        h('div', { class: 'rbtns' }, runBtn, markBtn, btn('↶ 되돌리기', undo, ''), btn('처음부터', resetAll, 'ghost'))),
+        h('div', { class: 'rbtns' }, runBtn, markBtn, endBtn, btn('↶ 되돌리기', undo, ''), btn('처음부터', resetAll, 'ghost'))),
       list);
 
     openSheet('타이밍 녹음 · 보정', body, {
@@ -902,6 +917,7 @@
         if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
         if (e.key === ' ') { e.preventDefault(); mark(); }
         else if (e.key === 'Backspace') { e.preventDefault(); undo(); }
+        else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); markEnd(); }
         else if (e.key === 'p' || e.key === 'P' || e.key === 'Enter') { e.preventDefault(); toggle(); }
       }
     });

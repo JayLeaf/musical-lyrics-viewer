@@ -229,12 +229,18 @@ body.sheet-open { overflow: hidden; }
 .rbtns { display: flex; flex-wrap: wrap; gap: 8px; }
 .rbtns .btn.big { flex: 1; min-width: 200px; }
 .rlist { display: flex; flex-direction: column; gap: 2px; }
-.rrow { display: grid; grid-template-columns: 82px 1fr auto; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 8px; }
+.rrow { display: grid; grid-template-columns: 82px 1fr 96px auto; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 8px; }
 .rrow.cur { background: rgba(255, 209, 102, .12); }
 .rrow .rt { border: 1px solid var(--line); background: var(--bg2); border-radius: 6px; padding: 5px 4px; font-variant-numeric: tabular-nums; font-size: 13px; cursor: pointer; }
 .rrow.none .rt { color: var(--faint); }
 .rrow .rx { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rrow .rb { display: flex; gap: 4px; }
+.rrow .rt.re.none { color: var(--faint); border-style: dashed; }
+@media (max-width: 560px) {
+  .rrow { grid-template-columns: 82px 96px 1fr; row-gap: 4px; }
+  .rrow .rx { grid-column: 1 / -1; order: -1; }
+  .rrow .rb { justify-content: flex-end; }
+}
 
 /* 배역 */
 .castlist { display: flex; flex-direction: column; gap: 6px; }

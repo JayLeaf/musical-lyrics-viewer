@@ -1,6 +1,6 @@
 /* 오프라인용 서비스 워커: 앱 파일을 기기에 저장해 두고 인터넷 없이도 연다.
    앱을 고칠 때마다 VERSION을 올려야 새 파일로 바뀐다. */
-var VERSION = 'v1.3.2';
+var VERSION = 'v1.3.3';
 var CACHE = 'lyrics-viewer-' + VERSION;
 var ASSETS = [
   './', './index.html', './style.css', './manifest.webmanifest',
@@ -9,7 +9,10 @@ var ASSETS = [
 ];
 
 self.addEventListener('install', function (e) {
-  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); }));
+  // cache: 'reload' — 브라우저 HTTP 캐시에 남은 예전 파일을 새 버전 저장소에 담지 않도록 서버에서 새로 받는다
+  e.waitUntil(caches.open(CACHE).then(function (c) {
+    return c.addAll(ASSETS.map(function (u) { return new Request(u, { cache: 'reload' }); }));
+  }).then(function () { return self.skipWaiting(); }));
 });
 
 self.addEventListener('activate', function (e) {
