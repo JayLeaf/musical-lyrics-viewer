@@ -1,0 +1,9 @@
+*.json.bak
+# 가사·타이밍 데이터는 절대 올리지 않음
+*.txt
+*.timing.json
+*.pair.json
+가사묶음-*.json
+
+# 가사 암호 파일은 절대 올리지 않음
+lyrics-password.txt
