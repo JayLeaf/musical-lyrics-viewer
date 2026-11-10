@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.7.1';
+  var APP_VERSION = '1.8.0';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   // 줄의 파트 색 (같은 성별 두 번째 가수는 2번 색)
   function pcls(ln) { return PCLS[ln.part] + (ln.v > 1 && ln.part !== '공' ? ln.v : ''); }
@@ -938,7 +938,16 @@
     // 줄 끝 시각: 겹치는 줄 묶기에 쓰임. 없는 줄은 null
     R.ends = (r.timing && Array.isArray(r.timing.ends) && r.timing.ends.length === R.times.length ? r.timing.ends.slice(0, L) : []);
     while (R.ends.length < L) R.ends.push(null);
-    R.next = R.times.indexOf(null); if (R.next < 0) R.next = L;
+    // 딸린 줄: 코러스 (괄호) 줄·동시(&) 줄. 앞 메인 줄 묶음에 붙어 나오므로 따로 찍지 않고 메인 줄 시각을 따라감
+    var ATT = p.lines.map(function (ln, i) { return i > 0 && (isCho(ln.text) || !!ln.with); });
+    function leadOf(i) { while (i > 0 && ATT[i]) i--; return i; }
+    function nextMain(i) { while (i < L && ATT[i]) i++; return i; }
+    function syncAtt() {
+      for (var i = 0; i < L; i++) if (ATT[i]) { R.times[i] = R.times[leadOf(i)]; R.ends[i] = null; }
+    }
+    syncAtt();
+    R.next = L;
+    for (var q0 = 0; q0 < L; q0++) if (!ATT[q0] && R.times[q0] === null) { R.next = q0; break; }
     var mismatch = r.timing && r.timing.lineCount !== L;
     // 시각은 base(기준 음원) 기준으로 저장. 화면·찍기는 지금 듣는 음원(src) 기준
     // 스톱워치(유튜브 등)는 원곡으로 본다. 찍은 시각이 하나도 없으면 첫 찍기 때 base = src
@@ -993,13 +1002,13 @@
       if (!isRunning()) { toggle(); }
       if (!R.base) R.base = R.src;
       R.times[R.next] = fromD(clock()); R.ends[R.next] = null;
-      R.next++; R.dirty = true; draw(true);
+      R.next = nextMain(R.next + 1); syncAtt(); R.dirty = true; draw(true);
     }
     function undo() {
       if (R.next <= 0) return;
-      R.next--;
+      R.next = leadOf(R.next - 1);
       var t = R.times[R.next];
-      R.times[R.next] = null; R.ends[R.next] = null; R.dirty = true;
+      R.times[R.next] = null; R.ends[R.next] = null; syncAtt(); R.dirty = true;
       if (R.audio && t !== null) seekTo(toD(t) - 3, false);
       draw(true);
     }
@@ -1029,6 +1038,7 @@
       if (thenPlay) { var pr = a.play(); if (pr && pr.catch) pr.catch(function (e) { toast('재생하지 못했어요: ' + e.message); }); }
     }
     function setNext(i) {
+      i = leadOf(i);
       R.next = i;
       if (R.audio) {
         var prevT = null;
@@ -1039,7 +1049,7 @@
     }
     function nudge(i, d) {
       if (R.times[i] === null) return;
-      R.times[i] = Math.max(0, round(R.times[i] + d, 2)); R.dirty = true; draw();
+      R.times[i] = Math.max(0, round(R.times[i] + d, 2)); syncAtt(); R.dirty = true; draw();
     }
     function nudgeEnd(i, d) {
       if (R.ends[i] === null) return;
@@ -1076,11 +1086,18 @@
         var ln = p.lines[R.next];
         target.append(h('div', { class: 'muted small' }, (R.next + 1) + '/' + L + '번 줄 — 이 줄을 부르기 시작할 때 누르세요'),
           h('div', { class: 'tline ' + pcls(ln) }, ln.singer ? h('span', { class: 'who' }, ln.singer + ' ') : null, ln.text));
-        if (R.next + 1 < L) target.append(h('div', { class: 'tnext muted' }, '다음: ' + p.lines[R.next + 1].text));
+        var nm = nextMain(R.next + 1);
+        if (nm < L) target.append(h('div', { class: 'tnext muted' }, '다음: ' + p.lines[nm].text));
       } else {
         target.append(h('div', { class: 'tline' }, '✔ 모든 줄을 찍었어요. 아래에서 보정하고 저장하세요.'));
       }
       var rows = p.lines.map(function (ln, i) {
+        if (ATT[i]) {
+          // 딸린 줄: 들여 쓰고 흐리게. 시각은 메인 줄을 따라가므로 조절 버튼 없음
+          return h('div', { class: 'rrow att' + (R.times[i] === null ? ' none' : '') },
+            h('span', { class: 'att-mark', title: (isCho(ln.text) ? '코러스' : '동시') + ' — ' + (leadOf(i) + 1) + '번 줄을 따라감' }, isCho(ln.text) ? '↳ 코러스' : '↳ 동시'),
+            h('div', { class: 'rx ' + pcls(ln) }, ln.text));
+        }
         return h('div', { class: 'rrow' + (i === R.next ? ' cur' : '') + (R.times[i] === null ? ' none' : '') },
           h('button', { class: 'rt', type: 'button', title: '여기서부터 다시 찍기', onclick: function () { setNext(i); } }, fmtT(toD(R.times[i]))),
           h('div', { class: 'rx ' + pcls(ln) }, ln.text),
@@ -1107,7 +1124,7 @@
     var nowI = -2;
     function nowLine() {
       var c = clock(), k = -1;
-      for (var i = 0; i < L; i++) if (R.times[i] !== null && toD(R.times[i]) <= c) k = i;
+      for (var i = 0; i < L; i++) if (!ATT[i] && R.times[i] !== null && toD(R.times[i]) <= c) k = i;
       return k;
     }
     function drawNow(force) {
@@ -1125,6 +1142,7 @@
     draw();
 
     async function save() {
+      syncAtt();
       // 줄 끝 시각(ends): 시작이 있고 끝이 시작보다 뒤인 줄만. 하나도 없으면 저장하지 않음
       var ends = R.ends.map(function (e, i) { return R.times[i] !== null && e !== null && e > R.times[i] ? e : null; });
       if (!ends.some(function (e) { return e !== null; })) ends = null;
@@ -1145,6 +1163,8 @@
           h('p', null, '유튜브로 들을 때: 유튜브에서 곡을 재생하는 순간 ▶ 시작을 누르고, 줄이 바뀔 때마다 Space(또는 ● 버튼). 틀리면 Backspace(↶)로 한 줄 되돌리기.'),
           h('p', null, '줄 끝: 방금 찍은 줄이 끝날 때 E(또는 ■ 버튼). 목록의 "끝" 칸을 누르면 지금 재생 위치가 그 줄의 끝이 돼요. 끝이 있으면 다음 줄이 끝나기 전에 나올 때 두 줄을 같이 보여줘요.'),
           h('p', null, '맨 위 칸(시계 옆)은 지금 재생 위치의 가사예요. 목록에서는 노란 막대로 표시돼요.'),
+          h('p', null, '들여 쓴 "↳ 코러스 / ↳ 동시" 줄은 바로 위 메인 줄에 딸려 같이 나와요. 따로 찍지 않아도 돼요 — Space는 메인 줄만 차례로 찍고, 메인 줄 시각을 고치면 딸린 줄도 따라가요.'),
+          h('p', null, '어떤 줄을 딸린 줄로 만들거나 풀려면 가사 편집에서: 줄 전체를 ( )로 감싸면 코러스, 줄 앞에 "& "를 붙이면 동시. 줄 수가 그대로라 타이밍은 안 어긋나요. 줄을 새로 넣거나 지우면 그 뒤 타이밍이 밀려요.'),
           btn('닫기', function () { ov.remove(); }, 'primary')));
       ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
       document.body.append(ov);
