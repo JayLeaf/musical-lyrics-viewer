@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.4.4';
+  var APP_VERSION = '1.6.2';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   // 줄의 파트 색 (같은 성별 두 번째 가수는 2번 색)
   function pcls(ln) { return PCLS[ln.part] + (ln.v > 1 && ln.part !== '공' ? ln.v : ''); }
@@ -88,21 +88,28 @@
   }
   // 화면에 한 번에 보여줄 줄 묶음: 다음 줄이 S.set.group초 안에 시작하면(짧은 줄),
   // (괄호) 줄이 그 2.5배 안에 시작하면(맞받는 줄), 앞 줄이 끝나기 전에 시작하면(겹침, timing.ends 있을 때)
-  // 앞 줄과 같이 보여준다. 최대 3줄.
+  // 앞 줄과 같이 보여준다. 메인 줄은 최대 3줄.
+  // 줄 전체가 (괄호)인 줄 = 코러스 줄: 시각과 상관없이 항상 앞 묶음에 붙는다(묶음을 새로 열지 않음, 최대 8줄).
+  //   → 자동 넘김은 메인 줄 시각으로만 일어나고, 코러스는 그 메인 줄 밑에 작게 같이 보인다.
   function makeGroups() {
     var n = S.parsed ? S.parsed.lines.length : 0, t = S.times, gap = S.set.group || 0, G = [];
     var r = cur(), tm = r && r.timing, own = tm && tm.times, ends = tm && Array.isArray(tm.ends) && tm.ends.length === n ? tm.ends : null;
     for (var i = 0; i < n; i++) {
-      var g = G[G.length - 1], join = false;
-      if (t && g && gap > 0 && g.length < 3) {
-        var d = t[i] - t[i - 1];
-        join = d < gap || (/^[\s(（]*[(（]/.test(S.parsed.lines[i].text) && d < gap * 2.5) ||
-          !!(ends && own && typeof own[i] === 'number' && typeof ends[i - 1] === 'number' && own[i] < ends[i - 1] - 0.3);
+      var g = G[G.length - 1], join = false, txt = S.parsed.lines[i].text;
+      if (g && isCho(txt)) join = g.length < 8;
+      else if (t && g && gap > 0) {
+        var main = g.filter(function (k) { return !isCho(S.parsed.lines[k].text); }), j = main[main.length - 1];
+        if (main.length < 3) {
+          var d = t[i] - t[j];
+          join = d < gap || (/^[\s(（]*[(（]/.test(txt) && d < gap * 2.5) ||
+            !!(ends && own && typeof own[i] === 'number' && typeof ends[j] === 'number' && own[i] < ends[j] - 0.3);
+        }
       }
       if (join) g.push(i); else G.push([i]);
     }
     return G;
   }
+  function isCho(text) { return /^\s*[(（][^()（）]*[)）]\s*$/.test(String(text)); }
   function selectSong(id) {
     S.curId = id; lsSet('lv.last', id);
     stopPlayback(); closeStageAudio(); reparse(); closeDrawer(); render();
@@ -188,7 +195,7 @@
   }
 
   function lineEl(ln, cls) {
-    var el = h('div', { class: cls + ' ' + pcls(ln) }, txtEl(ln.text));
+    var el = h('div', { class: cls + ' ' + pcls(ln) + (isCho(ln.text) ? ' cho' : '') }, txtEl(ln.text));
     if (S.set.showKo && ln.ko) el.append(h('div', { class: 'ko' }, ln.ko));
     return el;
   }
@@ -269,6 +276,7 @@
     var a = new Audio();
     PB.url = URL.createObjectURL(f); a.src = PB.url; a.preload = 'auto';
     a.addEventListener('ended', function () { PB.playing = false; cancelAnimationFrame(PB.raf); updateStage(); });
+    a.addEventListener('loadedmetadata', function () { updateHud(); });
     a.addEventListener('pause', function () { if (PB.playing) { PB.playing = false; cancelAnimationFrame(PB.raf); updateStage(); } });
     // 화면 갱신이 느려지거나 멈춰도(백그라운드 등) 음원 위치로 줄을 맞춘다
     a.addEventListener('timeupdate', function () {
@@ -314,6 +322,13 @@
     return '원곡 ' + Number(Math.abs(v).toFixed(2)) + '초 ' + (v > 0 ? '늦음' : '빠름');
   }
   function gT(g) { return effT(S.groups[g][0]); }
+  // 묶음이 끝나는 시각 (줄 끝 ends가 있으면 그것, 없으면 마지막 메인 줄 시작 + 3초로 어림)
+  function groupEnd(g) {
+    var r = cur(), tm = r && r.timing, grp = S.groups[g], last = grp[0];
+    grp.forEach(function (k) { if (!isCho(S.parsed.lines[k].text)) last = k; });
+    var e = tm && Array.isArray(tm.ends) ? tm.ends[last] : null;
+    return typeof e === 'number' ? e - S.times[last] + effT(last) : effT(last) + 3;
+  }
   function lineAt(s) {
     var lo = -1;
     for (var g = 0; g < S.groups.length; g++) { if (gT(g) - S.set.lead <= s) lo = g; else break; }
@@ -399,16 +414,30 @@
       S.times ? playBtn : h('span', { class: 'muted small notime' }, '타이밍 없음 · 탭/스와이프로 넘기기'),
       btn('›', function () { step(1); }, '', '다음 줄'),
       S.times ? h('span', { class: 'offset' },
-        btn('−0.5', function () { nudgeOffset(-0.5); }, 'small', '가사를 0.5초 빨리'),
+        btn('−0.1', function () { nudgeOffset(-0.1); }, 'small', '가사를 0.1초 빨리'),
         offVal,
-        btn('+0.5', function () { nudgeOffset(0.5); }, 'small', '가사를 0.5초 늦게')) : null,
+        btn('+0.1', function () { nudgeOffset(0.1); }, 'small', '가사를 0.1초 늦게')) : null,
       S.times ? apO.btn : null, S.times ? apM.btn : null, apO.inp, apM.inp, shiftBox,
       fsBtn
     );
     var rotate = h('div', { class: 'rotate-hint' }, '가로로 돌리면 더 크게 보여요');
-    st.append(prog, h('div', { class: 'hud' }, hudL, hudR, songNav('hud')), rotate, rows, ctrl);
+    // 음원 파일을 열었을 때만: 재생 위치 바 (끌어서 원하는 곳부터)
+    var seek = h('input', { type: 'range', class: 'seek', min: '0', max: '0', step: '0.1', value: '0', 'aria-label': '재생 위치' });
+    var seekT = h('span', { class: 'seekt muted small' });
+    var seekBox = h('div', { class: 'seekbox', hidden: true }, seek, seekT);
+    seek.addEventListener('input', function () {
+      STAGE.seeking = true;
+      var t = Number(seek.value);
+      seekSong(t);
+      seekT.textContent = fmtT(t) + (PB.audio && isFinite(PB.audio.duration) ? ' / ' + fmtT(PB.audio.duration) : '');
+      var i = S.times ? lineAt(t) : PB.idx;
+      if (i !== PB.idx) { PB.idx = i; updateStage(); }
+    });
+    seek.addEventListener('change', function () { STAGE.seeking = false; updateHud(); });
+    st.append(prog, h('div', { class: 'hud' }, hudL, hudR, songNav('hud')), rotate, rows, seekBox, ctrl);
     attachGestures(rows);
-    STAGE = { prog: prog.firstChild, hudR: hudR, slots: slots, playBtn: playBtn, offVal: offVal, fsBtn: fsBtn, aps: [apO, apM], shiftBox: shiftBox, shiftVal: shiftVal };
+    STAGE = { prog: prog.firstChild, hudR: hudR, slots: slots, playBtn: playBtn, offVal: offVal, fsBtn: fsBtn, aps: [apO, apM], shiftBox: shiftBox, shiftVal: shiftVal,
+      seek: seek, seekT: seekT, seekBox: seekBox, seeking: false };
     updateFsBtn();
     updateStage();
     return st;
@@ -430,11 +459,13 @@
     el.classList.add(pcls(p.lines[grp[0]]));
     if (grp.length > 1) el.classList.add('multi');
     // 묶음이면 원문 줄을 모두 먼저, 해석은 그 아래에 모아서 (영영 한한)
+    // 코러스 줄(줄 전체 괄호)은 작게, 배역 이름·해석 없이
     grp.forEach(function (li, k) {
-      var ln = p.lines[li], box = el;
-      if (grp.length > 1) { box = h('div', { class: 'gl ' + pcls(ln) }); el.append(box); }
-      var prev = k > 0 ? p.lines[grp[k - 1]] : null;
-      if (ln.singer && (ln.groupStart || (off === 0 && k === 0) || (prev && prev.singer !== ln.singer)))
+      var ln = p.lines[li], box = el, cho = isCho(ln.text);
+      if (grp.length > 1) { box = h('div', { class: 'gl ' + pcls(ln) + (cho ? ' cho' : '') }); el.append(box); }
+      var prev = null;
+      for (var q = k - 1; q >= 0 && !prev; q--) if (!isCho(p.lines[grp[q]].text)) prev = p.lines[grp[q]];
+      if (!cho && ln.singer && (ln.groupStart || (off === 0 && k === 0) || (prev && prev.singer !== ln.singer) || (!prev && k > 0)))
         box.append(h('div', { class: 'who' }, ln.singer));
       box.append(txtEl(ln.text));
       if (grp.length === 1 && S.set.showKo && ln.ko) box.append(h('div', { class: 'ko' }, ln.ko));
@@ -442,7 +473,7 @@
     if (grp.length > 1 && S.set.showKo) {
       grp.forEach(function (li) {
         var ln = p.lines[li];
-        if (ln.ko) el.append(h('div', { class: 'gl gk ' + pcls(ln) }, h('div', { class: 'ko' }, ln.ko)));
+        if (ln.ko && !isCho(ln.text)) el.append(h('div', { class: 'gl gk ' + pcls(ln) }, h('div', { class: 'ko' }, ln.ko)));
       });
     }
   }
@@ -470,16 +501,27 @@
     PB.hudAt = performance.now();
     var n = S.groups.length;
     STAGE.prog.style.width = (n ? ((PB.idx + 1) / n) * 100 : 0) + '%';
-    var msg = '';
+    var msg = '', cd = '';
     if (S.times) {
       if (!PB.playing && PB.idx < 0 && songNow() === 0) msg = PB.audio ? (PB.asrc === 'orig' ? '🎤 ' : '🎵 ') + PB.aname + ' · ▶로 같이 재생' : 'MR 시작과 동시에 ▶';
       else if (!PB.playing) msg = '일시정지';
       else if (PB.idx < n - 1) {
-        var rem = gT(PB.idx + 1) - S.set.lead - songNow();
-        if (rem > 3) msg = '다음 줄 ' + Math.ceil(rem) + '초';
+        // 앞 간격이 길면(전주·간주) 다음 가사까지 4·3·2·1 카운트다운
+        var now = songNow(), nt = gT(PB.idx + 1) - S.set.lead, rem = nt - now;
+        var from = PB.idx < 0 ? 0 : groupEnd(PB.idx);
+        if (rem > 0 && rem <= 4 && nt - from >= 6) cd = String(Math.ceil(rem));
       }
     }
     STAGE.hudR.textContent = msg;
+    STAGE.hudR.classList.toggle('cd', !!cd);
+    if (cd) STAGE.hudR.textContent = cd;
+    if (STAGE.seek && PB.audio && !STAGE.seeking) {
+      var dur = PB.audio.duration;
+      STAGE.seek.max = isFinite(dur) ? String(dur) : '0';
+      STAGE.seek.value = String(songNow());
+      STAGE.seekT.textContent = fmtT(songNow()) + (isFinite(dur) ? ' / ' + fmtT(dur) : '');
+    }
+    if (STAGE.seekBox) STAGE.seekBox.hidden = !PB.audio;
   }
 
   function attachGestures(el) {
@@ -535,8 +577,8 @@
     else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'PageUp') { e.preventDefault(); step(-1); }
     else if (k === 'Enter' || k === 'p' || k === 'P') { e.preventDefault(); PB.playing ? pause() : play(); }
     else if (k === 'Home') { e.preventDefault(); restart(); }
-    else if (k === '-' ) nudgeOffset(-0.5);
-    else if (k === '+' || k === '=') nudgeOffset(0.5);
+    else if (k === '-' ) nudgeOffset(-0.1);
+    else if (k === '+' || k === '=') nudgeOffset(0.1);
     else if (k === 'f' || k === 'F') toggleFs();
   });
 
@@ -876,6 +918,7 @@
     var p = LP.parseSong(r.raw, { counts: r.counts, overrides: S.overrides });
     var L = p.lines.length;
     if (!L) { toast('가사가 비어 있어요'); return; }
+    pause();   // 내려놓기·갤럭시북에서 재생 중이던 음원은 멈춤 (두 음원이 같이 나오지 않게)
     var R = {
       times: (r.timing && Array.isArray(r.timing.times) ? r.timing.times.slice(0, L) : []),
       next: 0, audio: null, url: null, swAcc: 0, swStart: 0, running: false, dirty: false, timer: 0
@@ -946,7 +989,7 @@
       R.next--;
       var t = R.times[R.next];
       R.times[R.next] = null; R.ends[R.next] = null; R.dirty = true;
-      if (R.audio && t !== null) R.audio.currentTime = Math.max(0, toD(t) - 3);
+      if (R.audio && t !== null) seekTo(toD(t) - 3, false);
       draw(true);
     }
     function resetAll() {
@@ -957,12 +1000,29 @@
       if (R.audio) { R.audio.pause(); R.audio.currentTime = 0; }
       draw(true);
     }
+    // 음원 위치 옮기기: 메타데이터 전이면 기다렸다가, 길이 밖이면 끝 앞으로. 옮긴 뒤 위치가 안 맞으면 알림
+    function seekTo(t, thenPlay) {
+      var a = R.audio; if (!a) return;
+      if (!isFinite(t)) { toast('옮길 위치를 계산하지 못했어요'); return; }
+      if (a.readyState < 1) {
+        a.addEventListener('loadedmetadata', function () { seekTo(t, thenPlay); }, { once: true });
+        return;
+      }
+      var dur = a.duration;
+      if (isFinite(dur) && t > dur - 0.5) { toast('줄 시각(' + fmtT(t) + ')이 음원 길이(' + fmtT(dur) + ')보다 뒤예요'); t = Math.max(0, dur - 0.5); }
+      t = Math.max(0, t);
+      a.addEventListener('seeked', function () {
+        if (Math.abs(a.currentTime - t) > 1.5) toast('음원 위치를 옮기지 못했어요 (목표 ' + fmtT(t) + ', 실제 ' + fmtT(a.currentTime) + ')', 6000);
+      }, { once: true });
+      a.currentTime = t;
+      if (thenPlay) { var pr = a.play(); if (pr && pr.catch) pr.catch(function (e) { toast('재생하지 못했어요: ' + e.message); }); }
+    }
     function setNext(i) {
       R.next = i;
       if (R.audio) {
         var prevT = null;
         for (var j = i - 1; j >= 0; j--) { if (R.times[j] !== null) { prevT = R.times[j]; break; } }
-        R.audio.currentTime = Math.max(0, (prevT === null ? 0 : toD(prevT)) - 1);
+        seekTo((prevT === null ? 0 : toD(prevT)) - 1, false);
       }
       draw(true);
     }
@@ -987,7 +1047,7 @@
     }
     function preview(i) {
       if (!R.audio || R.times[i] === null) { toast('미리 듣기는 MR/원곡 파일을 열었을 때만 돼요'); return; }
-      R.audio.currentTime = Math.max(0, toD(R.times[i]) - 1.5); R.audio.play();
+      seekTo(toD(R.times[i]) - 1.5, true);
     }
 
     var clockEl = h('div', { class: 'clock' });
@@ -1025,12 +1085,32 @@
             btn('▶', function () { preview(i); }, 'small', '이 줄부터 듣기')));
       });
       list.replaceChildren.apply(list, rows);
+      if (typeof drawNow === 'function') drawNow(true);
       if (scroll) {
         var c = list.querySelector('.rrow.cur');
         if (c) c.scrollIntoView({ block: 'nearest' });
       }
     }
-    R.timer = setInterval(function () { clockEl.textContent = fmtT(clock()); }, 100);
+    // 지금 나오는 가사: 재생 위치까지 시작한 마지막 줄 (찍은/고친 시각 그대로 반영). 목록에서도 그 줄 표시
+    var nowEl = h('div', { class: 'rnow' });
+    var nowI = -2;
+    function nowLine() {
+      var c = clock(), k = -1;
+      for (var i = 0; i < L; i++) if (R.times[i] !== null && toD(R.times[i]) <= c) k = i;
+      return k;
+    }
+    function drawNow(force) {
+      var k = nowLine();
+      if (k === nowI && !force) return;
+      var old = list.children[nowI]; if (old) old.classList.remove('play');
+      nowI = k;
+      var row = list.children[k]; if (row) row.classList.add('play');
+      nowEl.replaceChildren();
+      if (k < 0) { nowEl.append(h('span', { class: 'muted' }, '♪ (아직 가사 전)')); return; }
+      var ln = p.lines[k];
+      nowEl.append(h('span', { class: 'rnum muted' }, (k + 1) + ''), h('span', { class: 'rnowt ' + pcls(ln) }, txtEl(ln.text)));
+    }
+    R.timer = setInterval(function () { clockEl.textContent = fmtT(clock()); drawNow(); }, 100);
     draw();
 
     async function save() {
@@ -1045,18 +1125,29 @@
       toast(wrote ? '타이밍을 저장했어요 (폴더에도 저장됨)' : '타이밍을 저장했어요');
     }
 
+    // 설명은 i 버튼 → 모달로
+    function showHelp() {
+      var ov = h('div', { class: 'helpov', role: 'dialog', 'aria-label': '타이밍 작업 도움말' },
+        h('div', { class: 'helpbox' },
+          h('h3', null, '타이밍 작업 도움말'),
+          h('p', null, '원곡을 들으며 찍으면 원곡 기준으로 저장돼요. 노래방(파일 없이 ▶)에서는 MR 기준으로 넘어가니, 원곡과 MR의 시작이 다르면 위 "원곡−MR 차이"를 맞춰 주세요 (원곡 시각 − MR 시각).'),
+          h('p', null, '유튜브로 들을 때: 유튜브에서 곡을 재생하는 순간 ▶ 시작을 누르고, 줄이 바뀔 때마다 Space(또는 ● 버튼). 틀리면 Backspace(↶)로 한 줄 되돌리기.'),
+          h('p', null, '줄 끝: 방금 찍은 줄이 끝날 때 E(또는 ■ 버튼). 목록의 "끝" 칸을 누르면 지금 재생 위치가 그 줄의 끝이 돼요. 끝이 있으면 다음 줄이 끝나기 전에 나올 때 두 줄을 같이 보여줘요.'),
+          h('p', null, '맨 위 칸(시계 옆)은 지금 재생 위치의 가사예요. 목록에서는 노란 막대로 표시돼요.'),
+          btn('닫기', function () { ov.remove(); }, 'primary')));
+      ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+      document.body.append(ov);
+    }
     var body = h('div', { class: 'record' },
       mismatch ? h('div', { class: 'notice' }, '가사 줄 수가 바뀌어서 기존 타이밍이 어긋날 수 있어요. 확인 후 다시 찍어 주세요.') : null,
       h('div', { class: 'rsrc' },
         btn('🎤 원곡 파일 열기', function () { pickSrc = 'orig'; fileIn.click(); }, '', '목소리 있는 원곡 — 보통 이걸로 찍어요'),
         btn('🎵 MR 파일 열기', function () { pickSrc = 'mr'; fileIn.click(); }, '', 'MR로 맞는지 확인할 때'),
-        fileIn, rateSel, srcLbl),
+        fileIn, rateSel, btn('ⓘ', showHelp, 'small helpbtn', '도움말'), srcLbl),
       shiftRow,
-      h('p', { class: 'muted small' }, '원곡을 들으며 찍으면 원곡 기준으로 저장돼요. 노래방(파일 없이 ▶)에서는 MR 기준으로 넘어가니, 원곡과 MR의 시작이 다르면 위 "원곡−MR 차이"를 맞춰 주세요 (원곡 시각 − MR 시각).'),
       audioEl,
-      h('p', { class: 'muted small' }, '유튜브로 들을 때: 유튜브에서 곡을 재생하는 순간 ▶ 시작을 누르고, 줄이 바뀔 때마다 Space(또는 ● 버튼). 틀리면 Backspace(↶)로 한 줄 되돌리기.'),
-      h('p', { class: 'muted small' }, '줄 끝: 방금 찍은 줄이 끝날 때 E(또는 ■ 버튼). 목록의 "끝" 칸을 누르면 지금 재생 위치가 그 줄의 끝이 돼요. 끝이 있으면 다음 줄이 끝나기 전에 나올 때 두 줄을 같이 보여줘요.'),
-      h('div', { class: 'rpanel' }, clockEl, target,
+      // 보정 패널: 스크롤해도 위에 고정(.rpanel sticky). 시계 옆에 지금 나오는 가사
+      h('div', { class: 'rpanel' }, h('div', { class: 'rhead' }, clockEl, nowEl), target,
         h('div', { class: 'rbtns' }, runBtn, markBtn, endBtn, btn('↶ 되돌리기', undo, ''), btn('처음부터', resetAll, 'ghost'))),
       list);
 
@@ -1064,11 +1155,14 @@
       actions: [btn('저장', save, 'primary')],
       beforeClose: function () { return !R.dirty || confirm('저장하지 않고 닫을까요?'); },
       onClose: function () {
+        var hov = document.querySelector('.helpov'); if (hov) hov.remove();
         clearInterval(R.timer);
         if (R.audio) R.audio.pause();
         if (R.url) URL.revokeObjectURL(R.url);
       },
       onKey: function (e) {
+        var hov = document.querySelector('.helpov');
+        if (hov) { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); hov.remove(); } return; }
         if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
         if (e.key === ' ') { e.preventDefault(); mark(); }
         else if (e.key === 'Backspace') { e.preventDefault(); undo(); }

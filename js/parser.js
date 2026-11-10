@@ -32,19 +32,31 @@
   }
 
   // 이름 하나 → '공'|'남'|'여'|null
-  function lookup(n, ov) {
+  // 이름 앞뒤에 붙어도 되는 꾸밈말 (strict 모드에서 단어 조합 확인 때 나머지 단어로 허용)
+  var MOD = {};
+  ['YOUNG', 'OLD', 'LITTLE', 'ADULT', 'LADY', 'LORD', 'KING', 'QUEEN', 'PRINCE', 'PRINCESS', 'SIR', 'MR', 'MRS', 'MS',
+    'MISS', 'DR', 'CAPTAIN', 'GENERAL', 'COLONEL', 'MAJOR', 'JUDGE', 'BEADLE', 'FATHER', 'MOTHER', 'MADAME', 'MONSIEUR',
+    'SR', 'JR', 'I', 'II', 'III', 'IV', 'V'].forEach(function (k) { MOD[k] = true; });
+
+  // strict: "Take Philip Schuyler: …" 같은 가사 문장을 배역으로 오인하지 않도록,
+  //   단어 조합으로 찾을 때 나머지 단어가 꾸밈말(MOD)일 때만 인정 (콜론 형식의 대소문자 섞인 이름에 씀)
+  function lookup(n, ov, strict) {
     if (ov && ov[n]) return ov[n];
     if (GROUP[n]) return '공';
     if (CAST[n]) return CAST[n];
     var words = n.split(' ');
-    for (var i = 0; i < words.length; i++) {
-      if (GROUP[words[i]]) return '공';
+    if (!strict) {
+      for (var i = 0; i < words.length; i++) {
+        if (GROUP[words[i]]) return '공';
+      }
     }
     // "YOUNG ODYSSEUS", "LADY CAPULET" 같은 경우: 뒤에서부터 단어 조합 확인
     for (var a = 0; a < words.length; a++) {
       for (var b = words.length; b > a; b--) {
         var sub = words.slice(a, b).join(' ');
-        if (sub !== n && (ov && ov[sub] || CAST[sub])) return (ov && ov[sub]) || CAST[sub];
+        if (sub === n || !(ov && ov[sub] || CAST[sub])) continue;
+        if (strict && !words.slice(0, a).concat(words.slice(b)).every(function (w) { return MOD[w]; })) continue;
+        return (ov && ov[sub]) || CAST[sub];
       }
     }
     return null;
@@ -74,7 +86,7 @@
       var nm = splitNames(name);
       if (nm.length) {
         var hangulName = HANGUL.test(name) && name.length <= 14 && (name.match(/ /g) || []).length <= 3 && !/[.?!~]/.test(name);
-        var allKnown = nm.every(function (n) { return lookup(n, ov); });
+        var allKnown = nm.every(function (n) { return lookup(n, ov, true); });
         if (isUpperName(name) || hangulName || allKnown) {
           return { names: nm, display: name, rest: m[2] };
         }

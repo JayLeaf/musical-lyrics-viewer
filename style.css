@@ -17,7 +17,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .p-m2 { color: var(--m2); } .p-m3 { color: var(--m3); } .p-m4 { color: var(--m4); } .p-m5 { color: var(--m5); }
 .p-f2 { color: var(--f2); } .p-f3 { color: var(--f3); } .p-f4 { color: var(--f4); } .p-f5 { color: var(--f5); }
 .muted { color: var(--dim); }
-.bk { color: var(--c); opacity: .72; font-weight: 400; } .small { font-size: .85em; }
+.bk { color: var(--c); opacity: .72; font-weight: 400; font-size: .68em; } .cho .bk { font-size: 1em; } .small { font-size: .85em; }
 
 /* 상단 바 */
 #top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px;
@@ -79,11 +79,18 @@ body[data-mode="table"], body[data-mode="book"] { height: 100vh; height: 100dvh;
 .hud { display: flex; justify-content: space-between; gap: 12px; padding: 6px 16px 0; font-size: 13px; color: var(--dim); flex: none; }
 .hud-l { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hud-r { color: var(--accent); white-space: nowrap; }
+.hud-r.cd { font-size: 1.9em; font-weight: 800; line-height: 1; margin: -.35em 0; min-width: 1.2em; text-align: center; }
+.seekbox { flex: none; display: flex; align-items: center; gap: 10px; padding: 4px max(5vw, 16px) 0; }
+.seekbox[hidden] { display: none; }
+.seek { flex: 1; min-width: 0; accent-color: var(--accent); }
+.seekt { flex: none; font-variant-numeric: tabular-nums; }
 .rows { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: .25em; padding: 0 max(5vw, 16px); overflow: hidden; touch-action: none; cursor: pointer; }
 .slot { line-height: 1.22; transition: opacity .18s; }
 .slot:empty { display: none; }
 .slot.multi .gl { font-size: .86em; }
 .slot.multi .gl + .gl { margin-top: .18em; }
+.slot.multi .gl.cho { font-size: .58em; font-weight: 400; margin-top: .05em; padding-left: 1.2em; }
+.line.cho { font-size: .82em; padding-left: 1.2em; }
 .slot.multi .gl.gk { margin-top: .05em; }
 .slot.multi .gl:not(.gk) + .gl.gk { margin-top: .3em; }
 .slot .who { font-size: .42em; font-weight: 700; letter-spacing: .04em; opacity: .85; margin-bottom: .1em; }
@@ -244,6 +251,11 @@ body.sheet-open { overflow: hidden; }
 .rlist { display: flex; flex-direction: column; gap: 2px; }
 .rrow { display: grid; grid-template-columns: 82px 1fr 140px auto; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 8px; }
 .rrow.cur { background: rgba(255, 209, 102, .12); }
+.rrow.play { box-shadow: inset 3px 0 0 var(--accent); }
+.rhead { display: flex; align-items: center; gap: 14px; }
+.rnow { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 6px 12px; min-height: 1.6em; max-height: 3.6em; overflow: hidden; background: var(--bg3); border-radius: 10px; font-size: 19px; font-weight: 600; line-height: 1.35; }
+.rnow .rnum { font-size: 12px; flex: none; font-weight: 400; flex: none; }
+.rnowt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .rrow .rt { border: 1px solid var(--line); background: var(--bg2); border-radius: 6px; padding: 5px 4px; font-variant-numeric: tabular-nums; font-size: 13px; cursor: pointer; }
 .rrow.none .rt { color: var(--faint); }
 .rrow .rx { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -279,3 +291,8 @@ body.sheet-open { overflow: hidden; }
 .rshift { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; }
 .rshift .shiftlbl { min-width: 9em; text-align: center; font-variant-numeric: tabular-nums; font-size: 14px; }
 .ctrl .shiftbox .shiftval { font-size: 12px; white-space: nowrap; }
+.helpbtn { min-width: 40px; font-size: 18px; }
+.helpov { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.helpbox { background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; max-width: 560px; max-height: 85vh; overflow-y: auto; line-height: 1.55; }
+.helpbox h3 { margin: 0 0 8px; font-size: 17px; }
+.helpbox p { color: var(--dim); font-size: 14px; margin: 0 0 10px; }
