@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.7.0';
+  var APP_VERSION = '1.7.1';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   // 줄의 파트 색 (같은 성별 두 번째 가수는 2번 색)
   function pcls(ln) { return PCLS[ln.part] + (ln.v > 1 && ln.part !== '공' ? ln.v : ''); }
@@ -286,6 +286,7 @@
       if (!PB.playing || !S.times) return;
       var i = lineAt(songNow());
       if (i !== PB.idx) { PB.idx = i; updateStage(); }
+      else if (performance.now() - PB.hudAt > 100) updateHud();
     });
     PB.audio = a; PB.aname = f.name; PB.asrc = src === 'orig' ? 'orig' : 'mr';
     seekSong(PB.idx < 0 ? 0 : gT(PB.idx) - S.set.lead + 0.01);
@@ -360,7 +361,7 @@
     if (!PB.playing) return;
     var i = lineAt(songNow());
     if (i !== PB.idx) { PB.idx = i; updateStage(); }
-    else if (performance.now() - PB.hudAt > 250) updateHud();
+    else if (performance.now() - PB.hudAt > 100) updateHud();   // 카운트다운·"!"가 0.1초 안으로 맞게
     PB.raf = requestAnimationFrame(tick);
   }
   function step(d) {
@@ -508,11 +509,18 @@
     if (S.times) {
       if (!PB.playing && PB.idx < 0 && songNow() === 0) msg = PB.audio ? (PB.asrc === 'orig' ? '🎤 ' : '🎵 ') + PB.aname + ' · ▶로 같이 재생' : 'MR 시작과 동시에 ▶';
       else if (!PB.playing) msg = '일시정지';
-      else if (PB.idx < n - 1) {
-        // 앞 간격이 길면(전주·간주) 다음 가사까지 4·3·2·1 카운트다운
-        var now = songNow(), nt = gT(PB.idx + 1) - S.set.lead, rem = nt - now;
-        var from = PB.idx < 0 ? 0 : groupEnd(PB.idx);
-        if (rem > 0 && rem <= 4 && nt - from >= 6) cd = String(Math.ceil(rem));
+      else {
+        // 앞 간격이 길면(전주·간주) 3·2·1 다음 "!" — "!"가 뜨는 순간이 가사 시작 (줄 시작 시각 기준, 미리 넘김과 무관)
+        var now = songNow();
+        if (PB.idx < n - 1) {
+          var nt = gT(PB.idx + 1), rem = nt - now;
+          var from = PB.idx < 0 ? 0 : groupEnd(PB.idx);
+          if (rem > 0 && rem <= 3 && nt - from >= 6) cd = String(Math.ceil(rem));
+        }
+        if (!cd && PB.idx >= 0) {
+          var st = gT(PB.idx), el = now - st, from2 = PB.idx > 0 ? groupEnd(PB.idx - 1) : 0;
+          if (st - from2 >= 6) { if (el < 0) cd = '1'; else if (el < 0.8) cd = '!'; }
+        }
       }
     }
     STAGE.hudR.textContent = msg;
