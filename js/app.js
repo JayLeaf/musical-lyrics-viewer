@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.4.1';
+  var APP_VERSION = '1.4.2';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   var MODES = [['hand', '들고 보기'], ['table', '내려놓기'], ['book', '갤럭시북']];
 
@@ -194,7 +194,36 @@
   function songHead(r) {
     return h('div', { class: 'songhead' },
       h('div', { class: 'show' }, showName(r.folder)),
-      h('h1', null, r.file));
+      h('h1', null, r.file),
+      songNav('top'));
+  }
+
+  // 같은 폴더(작품)의 앞·뒤 곡 (가사 빈 곡은 건너뜀)
+  function neighborSong(d) {
+    var r = cur(); if (!r) return null;
+    var list = sortedSongs().filter(function (s) { return s.folder === r.folder && (hasText(s) || s.id === r.id); });
+    var i = -1;
+    for (var k = 0; k < list.length; k++) if (list[k].id === r.id) { i = k; break; }
+    return i < 0 ? null : (list[i + d] || null);
+  }
+  function goSong(d) {
+    var s = neighborSong(d);
+    if (s) selectSong(s.id);
+    else toast(d < 0 ? '이 작품의 첫 곡이에요' : '이 작품의 마지막 곡이에요');
+  }
+  function songNav(where) {
+    function b(d) {
+      var s = neighborSong(d);
+      var label = where === 'end'
+        ? (d < 0 ? '‹ 이전 곡' : (s ? '다음 곡 · ' + s.file + ' ›' : '마지막 곡이에요'))
+        : (d < 0 ? '‹ 이전 곡' : '다음 곡 ›');
+      return h('button', {
+        class: 'btn small snav' + (d > 0 ? ' next' : ''), type: 'button', disabled: !s,
+        title: s ? (d < 0 ? '이전 곡: ' : '다음 곡: ') + s.file : (d < 0 ? '첫 곡이에요' : '마지막 곡이에요'),
+        onclick: function () { if (s) selectSong(s.id); }
+      }, label);
+    }
+    return h('div', { class: 'songnav ' + where }, b(-1), b(1));
   }
 
   function handView(r) {
@@ -215,7 +244,7 @@
       if (ln.groupStart && ln.singer) wrap.append(h('div', { class: 'singer ' + PCLS[ln.part] }, ln.singer));
       wrap.append(lineEl(ln, 'line'));
     });
-    wrap.append(h('div', { class: 'endmark' }, '— 끝 —'));
+    wrap.append(h('div', { class: 'endmark' }, '— 끝 —'), songNav('end'));
     return wrap;
   }
 
@@ -375,7 +404,7 @@
       fsBtn
     );
     var rotate = h('div', { class: 'rotate-hint' }, '가로로 돌리면 더 크게 보여요');
-    st.append(prog, h('div', { class: 'hud' }, hudL, hudR), rotate, rows, ctrl);
+    st.append(prog, h('div', { class: 'hud' }, hudL, hudR, songNav('hud')), rotate, rows, ctrl);
     attachGestures(rows);
     STAGE = { prog: prog.firstChild, hudR: hudR, slots: slots, playBtn: playBtn, offVal: offVal, fsBtn: fsBtn, aps: [apO, apM], shiftBox: shiftBox, shiftVal: shiftVal };
     updateFsBtn();
@@ -495,6 +524,9 @@
     if (SHEET) { if (SHEET.onKey) SHEET.onKey(e); return; }
     if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
     if (e.key === 'Escape' && drawerOpen) { closeDrawer(); return; }
+    if ((e.ctrlKey || e.shiftKey) && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && cur()) {
+      e.preventDefault(); goSong(e.key === 'ArrowRight' ? 1 : -1); return;
+    }
     if (S.set.mode === 'hand' || !STAGE) return;
     var k = e.key;
     if (k === ' ' || k === 'ArrowRight' || k === 'ArrowDown' || k === 'PageDown') { e.preventDefault(); step(1); }
