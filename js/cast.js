@@ -10,6 +10,8 @@
     'Aeolus': M, 'Tiresias': M, 'Anticlea': F, 'Polyphemus': M, 'Cyclops': M, 'Scylla': F,
     'Apollo': M, 'Ares': M, 'Hera': F, 'Aphrodite': F, 'Elpenor': M, 'Perimedes': M,
     'Charybdis': C, 'Sirens': C, 'Lotus Eaters': C, 'Suitors': C, 'Crew': C, 'Winds': C,
+    'Soldier': M, 'Cyclopes': C, 'Winions': C, 'Laestrygonians': C, 'Siren': F, 'Hephaestus': M,
+    'Suitor': M, 'Eurymachus': M, 'Amphinomus': M, 'Melanthius': M,
     // Hamilton
     'Hamilton': M, 'Alexander Hamilton': M, 'Burr': M, 'Aaron Burr': M, 'Laurens': M, 'John Laurens': M,
     'Lafayette': M, 'Mulligan': M, 'Hercules Mulligan': M, 'Washington': M, 'George Washington': M,
@@ -18,6 +20,7 @@
     'Seabury': M, 'Samuel Seabury': M, 'Charles Lee': M, 'Lee': M, 'James Reynolds': M, 'Doctor': M,
     'Eliza': F, 'Eliza Hamilton': F, 'Angelica': F, 'Angelica Schuyler': F, 'Peggy': F,
     'Maria': F, 'Maria Reynolds': F, 'Martha Washington': F, 'Schuyler Sisters': C, 'Sisters': C,
+    'Recorded Samples': C,
     // Sweeney Todd
     'Sweeney': M, 'Todd': M, 'Sweeney Todd': M, 'Mrs Lovett': F, 'Lovett': F, 'Anthony': M,
     'Johanna': F, 'Judge Turpin': M, 'Judge': M, 'Turpin': M, 'Beadle': M, 'Beadle Bamford': M,
@@ -35,6 +38,7 @@
     // 기타
     'Aida': F, 'Radames': M, 'Amneris': F,
     'Lizzie': F, 'Lizzie Borden': F, 'Emma': F, 'Emma Borden': F, 'Bridget': F, 'Alice': F,
+    '리지': F, '엠마': F, '앨리스': F, '브리짓': F,
     '빅터': M, '빅터 프랑켄슈타인': M, '앙리': M, '앙리 뒤프레': M, '괴물': M, '줄리아': F, '엘렌': F, '까뜨린느': F,
     '몬테크리스토': M, '에드몽': M, '에드몽 단테스': M, '메르세데스': F, '몬데고': M, '빌포트': M, '당글라스': M
   };
