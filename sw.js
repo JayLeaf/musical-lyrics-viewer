@@ -1,6 +1,6 @@
 /* 오프라인용 서비스 워커: 앱 파일을 기기에 저장해 두고 인터넷 없이도 연다.
    앱을 고칠 때마다 VERSION을 올려야 새 파일로 바뀐다. */
-var VERSION = 'v1.4.2';
+var VERSION = 'v1.4.3';
 var CACHE = 'lyrics-viewer-' + VERSION;
 var ASSETS = [
   './', './index.html', './style.css', './manifest.webmanifest',

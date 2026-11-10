@@ -2,8 +2,10 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.4.2';
+  var APP_VERSION = '1.4.3';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
+  // 줄의 파트 색 (같은 성별 두 번째 가수는 2번 색)
+  function pcls(ln) { return PCLS[ln.part] + (ln.v === 2 && ln.part !== '공' ? '2' : ''); }
   var MODES = [['hand', '들고 보기'], ['table', '내려놓기'], ['book', '갤럭시북']];
 
   // ---------------------------------------------------------------- 도구
@@ -186,7 +188,7 @@
   }
 
   function lineEl(ln, cls) {
-    var el = h('div', { class: cls + ' ' + PCLS[ln.part] }, txtEl(ln.text));
+    var el = h('div', { class: cls + ' ' + pcls(ln) }, txtEl(ln.text));
     if (S.set.showKo && ln.ko) el.append(h('div', { class: 'ko' }, ln.ko));
     return el;
   }
@@ -241,7 +243,7 @@
     p.lines.forEach(function (ln) {
       if (prev !== null && ln.stanza !== prev) wrap.append(h('div', { class: 'gap' }));
       prev = ln.stanza;
-      if (ln.groupStart && ln.singer) wrap.append(h('div', { class: 'singer ' + PCLS[ln.part] }, ln.singer));
+      if (ln.groupStart && ln.singer) wrap.append(h('div', { class: 'singer ' + pcls(ln) }, ln.singer));
       wrap.append(lineEl(ln, 'line'));
     });
     wrap.append(h('div', { class: 'endmark' }, '— 끝 —'), songNav('end'));
@@ -425,12 +427,12 @@
       return;
     }
     var grp = S.groups[i];
-    el.classList.add(PCLS[p.lines[grp[0]].part]);
+    el.classList.add(pcls(p.lines[grp[0]]));
     if (grp.length > 1) el.classList.add('multi');
     // 묶음이면 원문 줄을 모두 먼저, 해석은 그 아래에 모아서 (영영 한한)
     grp.forEach(function (li, k) {
       var ln = p.lines[li], box = el;
-      if (grp.length > 1) { box = h('div', { class: 'gl ' + PCLS[ln.part] }); el.append(box); }
+      if (grp.length > 1) { box = h('div', { class: 'gl ' + pcls(ln) }); el.append(box); }
       var prev = k > 0 ? p.lines[grp[k - 1]] : null;
       if (ln.singer && (ln.groupStart || (off === 0 && k === 0) || (prev && prev.singer !== ln.singer)))
         box.append(h('div', { class: 'who' }, ln.singer));
@@ -440,7 +442,7 @@
     if (grp.length > 1 && S.set.showKo) {
       grp.forEach(function (li) {
         var ln = p.lines[li];
-        if (ln.ko) el.append(h('div', { class: 'gl gk ' + PCLS[ln.part] }, h('div', { class: 'ko' }, ln.ko)));
+        if (ln.ko) el.append(h('div', { class: 'gl gk ' + pcls(ln) }, h('div', { class: 'ko' }, ln.ko)));
       });
     }
   }
@@ -721,7 +723,7 @@
 
   // ---------------------------------------------------------------- 가사 편집
   function lineMini(ln) {
-    var el = h('div', { class: 'mini ' + PCLS[ln.part] });
+    var el = h('div', { class: 'mini ' + pcls(ln) });
     if (ln.groupStart && ln.singer) el.append(h('span', { class: 'who' }, ln.singer));
     el.append(h('span', null, ln.text));
     if (ln.ko) el.append(h('div', { class: 'ko' }, ln.ko));
@@ -844,7 +846,7 @@
         rows.push(h('div', { class: 'prow' + (flags[i] ? ' flag' : '') + (c === 0 ? ' none' : '') },
           h('div', { class: 'pn' }, String(i + 1)),
           h('div', { class: 'pt' },
-            h('div', { class: 'o ' + PCLS[ln.part] }, ln.text),
+            h('div', { class: 'o ' + pcls(ln) }, ln.text),
             h('div', { class: 'k' }, ko || '— 해석 없음 —')),
           h('div', { class: 'pb' },
             btn('▲ 당기기', function () { take(i); }, 'small'),
@@ -1002,7 +1004,7 @@
       if (R.next < L) {
         var ln = p.lines[R.next];
         target.append(h('div', { class: 'muted small' }, (R.next + 1) + '/' + L + '번 줄 — 이 줄을 부르기 시작할 때 누르세요'),
-          h('div', { class: 'tline ' + PCLS[ln.part] }, ln.singer ? h('span', { class: 'who' }, ln.singer + ' ') : null, ln.text));
+          h('div', { class: 'tline ' + pcls(ln) }, ln.singer ? h('span', { class: 'who' }, ln.singer + ' ') : null, ln.text));
         if (R.next + 1 < L) target.append(h('div', { class: 'tnext muted' }, '다음: ' + p.lines[R.next + 1].text));
       } else {
         target.append(h('div', { class: 'tline' }, '✔ 모든 줄을 찍었어요. 아래에서 보정하고 저장하세요.'));
@@ -1010,7 +1012,7 @@
       var rows = p.lines.map(function (ln, i) {
         return h('div', { class: 'rrow' + (i === R.next ? ' cur' : '') + (R.times[i] === null ? ' none' : '') },
           h('button', { class: 'rt', type: 'button', title: '여기서부터 다시 찍기', onclick: function () { setNext(i); } }, fmtT(toD(R.times[i]))),
-          h('div', { class: 'rx ' + PCLS[ln.part] }, ln.text),
+          h('div', { class: 'rx ' + pcls(ln) }, ln.text),
           h('div', { class: 're-box' },
             h('button', { class: 'en', type: 'button', title: '끝 0.1초 앞으로', disabled: R.ends[i] === null, onclick: function () { nudgeEnd(i, -0.1); } }, '‹'),
             h('button', { class: 'rt re' + (R.ends[i] === null ? ' none' : ''), type: 'button',

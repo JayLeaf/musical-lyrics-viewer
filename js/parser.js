@@ -125,6 +125,24 @@
     return sum === K;
   }
 
+  // 같은 성별 안에서 가수별 색 번호(1·2): 첫 가수는 1, 새 가수가 처음 나오면
+  // 바로 앞 같은 성별 가수와 다른 번호를 받고, 곡 안에서는 그 번호를 계속 쓴다.
+  function assignVariants(lines) {
+    var map = {}, last = {};
+    lines.forEach(function (ln) {
+      ln.v = 1;
+      var p = ln.part;
+      if (p !== '남' && p !== '여') return;
+      var key = normName(ln.singer || '');
+      if (!(key in map)) {
+        var prev = last[p];
+        map[key] = prev && prev.key !== key ? 3 - prev.v : 1;
+      }
+      ln.v = map[key];
+      last[p] = { key: key, v: ln.v };
+    });
+  }
+
   function parseSong(raw, opt) {
     opt = opt || {};
     var ov = opt.overrides || {};
@@ -227,6 +245,7 @@
       off += counts[idx];
       delete l.tok;
     });
+    assignVariants(lines);
 
     return {
       lines: lines, koLines: koLines, counts: counts, autoCounts: autoCounts,
