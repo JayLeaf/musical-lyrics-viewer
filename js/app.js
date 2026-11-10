@@ -2,10 +2,10 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.4.3';
+  var APP_VERSION = '1.4.4';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   // 줄의 파트 색 (같은 성별 두 번째 가수는 2번 색)
-  function pcls(ln) { return PCLS[ln.part] + (ln.v === 2 && ln.part !== '공' ? '2' : ''); }
+  function pcls(ln) { return PCLS[ln.part] + (ln.v > 1 && ln.part !== '공' ? ln.v : ''); }
   var MODES = [['hand', '들고 보기'], ['table', '내려놓기'], ['book', '갤럭시북']];
 
   // ---------------------------------------------------------------- 도구

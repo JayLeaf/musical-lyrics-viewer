@@ -125,21 +125,33 @@
     return sum === K;
   }
 
-  // 같은 성별 안에서 가수별 색 번호(1·2): 첫 가수는 1, 새 가수가 처음 나오면
-  // 바로 앞 같은 성별 가수와 다른 번호를 받고, 곡 안에서는 그 번호를 계속 쓴다.
+  // 같은 성별 안에서 가수별 색 번호(1~5): 처음 나온 순서대로 1, 2, … 5번을 주고,
+  // 곡 안에서는 그 번호를 계속 쓴다. 6번째 가수부터는 바로 앞 같은 성별 가수와 다른 번호 중
+  // 가장 오래 안 쓰인 번호를 받는다.
+  var NVAR = 5;
   function assignVariants(lines) {
-    var map = {}, last = {};
-    lines.forEach(function (ln) {
+    var map = {}, st = {};
+    lines.forEach(function (ln, i) {
       ln.v = 1;
       var p = ln.part;
       if (p !== '남' && p !== '여') return;
-      var key = normName(ln.singer || '');
+      var s = st[p] || (st[p] = { n: 0, last: null, used: [] });
+      var key = p + '|' + normName(ln.singer || '');
       if (!(key in map)) {
-        var prev = last[p];
-        map[key] = prev && prev.key !== key ? 3 - prev.v : 1;
+        if (s.n < NVAR) map[key] = ++s.n;
+        else {
+          var best = 0, bestAt = Infinity;
+          for (var v = 1; v <= NVAR; v++) {
+            if (s.last && s.last.v === v) continue;
+            var at = s.used[v] === undefined ? -1 : s.used[v];
+            if (at < bestAt) { bestAt = at; best = v; }
+          }
+          map[key] = best || 1;
+        }
       }
       ln.v = map[key];
-      last[p] = { key: key, v: ln.v };
+      s.used[ln.v] = i;
+      s.last = { key: key, v: ln.v };
     });
   }
 
