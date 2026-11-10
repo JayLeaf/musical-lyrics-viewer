@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.6.2';
+  var APP_VERSION = '1.7.0';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   // 줄의 파트 색 (같은 성별 두 번째 가수는 2번 색)
   function pcls(ln) { return PCLS[ln.part] + (ln.v > 1 && ln.part !== '공' ? ln.v : ''); }
@@ -89,14 +89,17 @@
   // 화면에 한 번에 보여줄 줄 묶음: 다음 줄이 S.set.group초 안에 시작하면(짧은 줄),
   // (괄호) 줄이 그 2.5배 안에 시작하면(맞받는 줄), 앞 줄이 끝나기 전에 시작하면(겹침, timing.ends 있을 때)
   // 앞 줄과 같이 보여준다. 메인 줄은 최대 3줄.
-  // 줄 전체가 (괄호)인 줄 = 코러스 줄: 시각과 상관없이 항상 앞 묶음에 붙는다(묶음을 새로 열지 않음, 최대 8줄).
+  // 줄 전체가 (괄호)인 줄 = 코러스 줄: 시각과 상관없이 항상 앞 묶음에 붙는다(묶음을 새로 열지 않음, 최대 10줄).
   //   → 자동 넘김은 메인 줄 시각으로만 일어나고, 코러스는 그 메인 줄 밑에 작게 같이 보인다.
   function makeGroups() {
     var n = S.parsed ? S.parsed.lines.length : 0, t = S.times, gap = S.set.group || 0, G = [];
     var r = cur(), tm = r && r.timing, own = tm && tm.times, ends = tm && Array.isArray(tm.ends) && tm.ends.length === n ? tm.ends : null;
     for (var i = 0; i < n; i++) {
       var g = G[G.length - 1], join = false, txt = S.parsed.lines[i].text;
-      if (g && isCho(txt)) join = g.length < 8;
+      var mainN = g ? g.filter(function (k) { return !isCho(S.parsed.lines[k].text); }).length : 0;
+      if (g && isCho(txt)) join = g.length < 10;
+      // "& 가사"(동시 줄): 시각과 상관없이 앞 묶음에 붙음, 메인 크기 그대로 (메인 줄 최대 4줄 = 4중창)
+      else if (g && S.parsed.lines[i].with) join = mainN < 4;
       else if (t && g && gap > 0) {
         var main = g.filter(function (k) { return !isCho(S.parsed.lines[k].text); }), j = main[main.length - 1];
         if (main.length < 3) {

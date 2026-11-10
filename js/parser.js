@@ -188,6 +188,9 @@
     }
     src.forEach(function (s) {
       if (!s) { tokens.push({ t: 'blank' }); return; }
+      // "& 가사" = 앞 줄과 동시에 부르는 줄 (다른 배역의 대위 선율). & 는 떼고 표시만 남김
+      var wm = s.match(/^&\s+(.+)$/);
+      if (wm) { tokens.push({ t: 'lyric', text: wm[1], with: true }); return; }
       var lab = detectLabel(s, ov);
       if (lab) {
         if (!koreanSong && lab.names && lab.names.some(function (n) { return HANGUL.test(n); })) {
@@ -218,7 +221,7 @@
         singer = prettyName(lab.display || lab.names.join(' & '));
         groupStart = true;
       } else if (tk.t === 'lyric') {
-        lines.push({ text: tk.text, part: part, singer: singer, stanza: stanza, groupStart: groupStart, tok: k, ko: '' });
+        lines.push({ text: tk.text, part: part, singer: singer, stanza: stanza, groupStart: groupStart, tok: k, ko: '', with: !!tk.with });
         groupStart = false; saw = true;
       } else if (tk.t === 'ko') {
         if (firstKoTok < 0) firstKoTok = k;
