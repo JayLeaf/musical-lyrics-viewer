@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   var LP = window.LP, DB = window.LDB;
-  var APP_VERSION = '1.8.0';
+  var APP_VERSION = '1.8.1';
   var PCLS = { '공': 'p-c', '남': 'p-m', '여': 'p-f' };
   // 줄의 파트 색 (같은 성별 두 번째 가수는 2번 색)
   function pcls(ln) { return PCLS[ln.part] + (ln.v > 1 && ln.part !== '공' ? ln.v : ''); }
@@ -136,18 +136,28 @@
   }
 
   // ---------------------------------------------------------------- 화면 꺼짐 방지
-  var wl = null;
+  // 시스템(절전 등)이 잠금을 풀어 버리면 다시 잡는다: 풀릴 때·화면 만질 때·15초마다
+  var wl = null, wlBusy = false;
   async function wakeOn() {
-    if (!S.set.wake || !('wakeLock' in navigator) || document.visibilityState !== 'visible' || wl) return;
+    if (!S.set.wake || !('wakeLock' in navigator) || document.visibilityState !== 'visible' || (wl && !wl.released) || wlBusy) return;
+    wlBusy = true;
     try {
-      wl = await navigator.wakeLock.request('screen');
-      wl.addEventListener('release', function () { wl = null; });
+      var lock = await navigator.wakeLock.request('screen');
+      wl = lock;
+      lock.addEventListener('release', function () {
+        if (wl === lock) wl = null;
+        setTimeout(wakeOn, 1000);
+      });
     } catch (e) { wl = null; }
+    wlBusy = false;
   }
-  function wakeOff() { if (wl) { wl.release().catch(function () {}); wl = null; } }
+  function wakeOff() { var l = wl; wl = null; if (l) l.release().catch(function () {}); }
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') wakeOn();
   });
+  window.addEventListener('focus', wakeOn);
+  document.addEventListener('pointerdown', wakeOn, true);
+  setInterval(wakeOn, 15000);
 
   // ---------------------------------------------------------------- 그리기
   function render() {
@@ -333,6 +343,13 @@
     var e = tm && Array.isArray(tm.ends) ? tm.ends[last] : null;
     return typeof e === 'number' ? e - S.times[last] + effT(last) : effT(last) + 3;
   }
+  // 묶음 g 앞이 길게 비면 3·2·1·"!"를 띄운다: 앞 묶음 끝→g 시작이 4초 이상, 또는 앞 묶음 시작→g 시작이 8초 이상
+  var CD_GAP_END = 4, CD_GAP_START = 8;
+  function longGapBefore(g) {
+    if (g <= 0) return gT(0) >= CD_GAP_END;
+    var t = gT(g);
+    return t - groupEnd(g - 1) >= CD_GAP_END || t - gT(g - 1) >= CD_GAP_START;
+  }
   function lineAt(s) {
     var lo = -1;
     for (var g = 0; g < S.groups.length; g++) { if (gT(g) - S.set.lead <= s) lo = g; else break; }
@@ -513,13 +530,12 @@
         // 앞 간격이 길면(전주·간주) 3·2·1 다음 "!" — "!"가 뜨는 순간이 가사 시작 (줄 시작 시각 기준, 미리 넘김과 무관)
         var now = songNow();
         if (PB.idx < n - 1) {
-          var nt = gT(PB.idx + 1), rem = nt - now;
-          var from = PB.idx < 0 ? 0 : groupEnd(PB.idx);
-          if (rem > 0 && rem <= 3 && nt - from >= 6) cd = String(Math.ceil(rem));
+          var rem = gT(PB.idx + 1) - now;
+          if (rem > 0 && rem <= 3 && longGapBefore(PB.idx + 1)) cd = String(Math.ceil(rem));
         }
         if (!cd && PB.idx >= 0) {
-          var st = gT(PB.idx), el = now - st, from2 = PB.idx > 0 ? groupEnd(PB.idx - 1) : 0;
-          if (st - from2 >= 6) { if (el < 0) cd = '1'; else if (el < 0.8) cd = '!'; }
+          var el = now - gT(PB.idx);
+          if (longGapBefore(PB.idx)) { if (el < 0) cd = '1'; else if (el < 0.8) cd = '!'; }
         }
       }
     }
